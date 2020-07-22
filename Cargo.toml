@@ -1,0 +1,41 @@
+[package]
+name = "project-haystack-rs"
+version = "0.1.0"
+authors = ["Glenn Pierce <glenn.pierce@carnegosystems.com>"]
+edition = "2018"
+
+[lib]
+name = "libproject_haystack_rs"
+path = "src/lib.rs"
+
+[dependencies]
+bytes = "*"
+escape8259 = "*"
+ring = "0.16.15"
+stringprep = "*"
+# openssl = { version = "0.10", features = ["vendored"] }
+rand = "0.6.5"
+data-encoding = "*"
+parking_lot = "*"
+http = "*"
+serde = { version = "1.0.100", features = ["derive"] }
+lazy_static = "*"
+chrono = { version = "0.4" }
+dtparse = "*"
+nom = "5.0.0"
+nom-unicode = "^0.1"
+warp = { version = "*", features = ["tls"] }
+pretty_env_logger = "*"
+log = { version = "0.4", features = ["std"] }
+
+[dependencies.tokio]
+features = ["fs", "stream", "sync", "time"]
+version = "0.2"
+
+[dev-dependencies.tokio]
+features = ["macros"]
+version = "0.2"
+
+[[bin]]
+name = "test_server"
+path = "src/test_server.rs"
