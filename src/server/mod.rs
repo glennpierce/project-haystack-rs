@@ -3,6 +3,7 @@ use std::collections::{HashMap};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::str;
+use std::fmt;
 
 use warp;
 use warp::{http::StatusCode, Filter, Buf, http::Response, Reply, Rejection, reject};
@@ -23,6 +24,7 @@ use bytes;
 
 use crate::hval::{HVal};
 use crate::token::*;
+use crate::error::*;
 
 use nom::{
     named,
@@ -62,21 +64,22 @@ fn get_nonce() -> String {
         .collect()
 }
 
-fn get_hanshake_token() -> String {
+pub fn get_hanshake_token() -> String {
     iter::repeat(())
         .map(|()| rand::thread_rng().sample(Alphanumeric))
         .take(7)
         .collect()
 }
 
-fn get_salt() -> String {
+pub fn get_salt() -> String {
     let mut r = OsRng::new().unwrap();
 
     // Random bytes.
     let mut my_secure_bytes = vec![0u8; 22];
     r.fill_bytes(&mut my_secure_bytes);
 
-    BASE64_NOPAD.encode(&my_secure_bytes)
+    //BASE64_NOPAD.encode(&my_secure_bytes)
+    BASE64.encode(&my_secure_bytes)
 }
 
 
@@ -105,48 +108,6 @@ pub type BoxError = std::boxed::Box<dyn
 	+ std::marker::Send // needed for threads
 	+ std::marker::Sync // needed for threads
 >;
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Item {
-	pub handshake_token: String,
-    pub username: String,
-    pub auth_token: Option<String>,
-    pub client_nonce: Option<String>,
-    pub server_salt: Option<String>,
-    pub client_first_message: Option<String>,
-    pub server_first_message: Option<String>,
-    pub client_final_no_pf: Option<String>,
-}
-
-impl Item {
-    fn new(handshake_token: &str, username: &str) -> Self {
-        Item {
-            handshake_token: handshake_token.to_string(),
-            username: username.to_string(),
-            auth_token: None,
-            client_nonce: None,
-            server_salt: None,
-            client_first_message: None,
-            server_first_message: None,
-            client_final_no_pf: None,
-        }
-    }
-}
-
-type Items = HashMap<String, Item>;
-
-#[derive(Clone, Debug)]
-pub struct Store {
-    items: Arc<RwLock<Items>>
-}
-
-impl Store {
-    fn new() -> Self {
-        Store {
-            items: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-}
 
 fn base64url_char<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     let allowed_chars: &str = "_-=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -346,7 +307,56 @@ macro_rules! return_reponse_token {
     };
 }
 
-async fn haystack_authentication(header: String, store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+
+
+pub trait UserAuthStore: fmt::Debug + Send + Sync {
+
+    // Return handshake token for username. If user has no handshake token generate one
+    fn get_handshake_token(&self, username: &str) -> HaystackResult<String>;
+    fn get_username(&self, handshake_token: &str) -> HaystackResult<String>;
+
+    // fn get_password(handshake_token: &str) -> String;
+ 
+    fn set_client_final_no_pf(&mut self, s: Option<String>) -> HaystackResult<()>;
+    fn set_client_first_message(&mut self, s: Option<String>) -> HaystackResult<()>;
+    fn set_server_salt(&mut self, s: Option<String>) -> HaystackResult<()>;
+    fn set_client_nonce(&mut self, s: Option<String>) -> HaystackResult<()>;
+    fn set_server_first_message(&mut self, s: Option<String>) -> HaystackResult<()>;
+    fn set_authtoken(&mut self, s: Option<String>) -> HaystackResult<()>;
+
+    fn get_server_salt(&self) -> HaystackResult<Option<String>>;
+    fn get_client_nonce(&self) -> HaystackResult<Option<String>>;
+    fn get_client_first_message(&self) -> HaystackResult<Option<String>>;
+    fn get_server_first_message(&self) -> HaystackResult<Option<String>>;
+    fn get_client_final_no_pf(&self) -> HaystackResult<Option<String>>;
+    fn get_authtoken(&self) -> HaystackResult<Option<String>>;
+
+}
+
+type Store = Arc<RwLock<Box<dyn UserAuthStore>>>;
+
+/// returns a base64 encoded sha256 salt of password. salt_base64 param is base64 encoded as well
+pub fn haystack_generate_salted_password(password: &str, salt_base64: &str, iterations: u32) -> String
+{
+    let salt: Vec<u8> = BASE64.decode(salt_base64.to_string().as_bytes()).unwrap();
+
+    let password_prep: String = stringprep::saslprep(password).unwrap().to_string();
+    
+    let PBKDF2_ALG: ring::pbkdf2::Algorithm = ring::pbkdf2::PBKDF2_HMAC_SHA256;
+    const CREDENTIAL_LEN: usize = ring::digest::SHA256_OUTPUT_LEN;
+    pub type Credential = [u8; CREDENTIAL_LEN];
+    let pbkdf2_iterations: NonZeroU32 = NonZeroU32::new(iterations).unwrap();
+
+    let mut salted_passwd: Credential = [0u8; CREDENTIAL_LEN];
+    ring::pbkdf2::derive(PBKDF2_ALG, pbkdf2_iterations, &salt,
+        password_prep.as_bytes(), &mut salted_passwd);
+
+    debug!("salted_password NEW!!!!!!!: {:X?}", salted_passwd);
+
+    BASE64.encode(&salted_passwd)
+}
+
+pub async fn haystack_authentication(header: String, store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 
     debug!("header: {}", header);
 
@@ -360,10 +370,14 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
             return_reponse_token!(401, &get_hanshake_token());
         }
 
-        let handshaken_token = get_hanshake_token();
+        let username = &result.unwrap().1;
+        let handshaken_token_result = store.read().get_handshake_token(&username);
 
-        store.items.write().insert(handshaken_token.to_string(), 
-            Item::new(&handshaken_token, &result.unwrap().1));
+        if handshaken_token_result.is_err() {
+            return_reponse_token!(401, &get_hanshake_token());
+        }
+
+        let handshaken_token = handshaken_token_result.unwrap();
 
         let response = warp::reply::with_status("", http::StatusCode::from_u16(401).unwrap());
         let response = warp::reply::with_header(response, "WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}",
@@ -384,8 +398,10 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
 
         // "c=biws,r=FGtSdkud2+OITwYjnsinhdFQTV30vcq9gJLfOA24,p=Rvtb2jtsDwpOTxCul7iqH+btzD8662mQNSped/x8THc="
         let parts: Vec<&str> = data_str.split(",p=").collect();
-        store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().client_final_no_pf = Some(parts[0].to_string());
-   
+        if store.write().set_client_final_no_pf(Some(parts[0].to_string())).is_err() {
+            return_reponse_token!(401, &get_hanshake_token());
+        }
+
         let gs2_header_result = gs2_header(data_str);
         let data;
 
@@ -401,8 +417,10 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
 
             let (remaining, _) = gs2_header(data_str).unwrap();
      
-            store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().client_first_message = Some(remaining.to_string());
-            
+            if store.write().set_client_first_message(Some(remaining.to_string())).is_err() {
+                return_reponse_token!(401, &get_hanshake_token());
+            }
+  
             data = decode_scram_data(remaining, BASE64).unwrap().1;
             debug!("data: {:?}", data);
 
@@ -416,14 +434,16 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
             let client_username = data.get("n").unwrap();
             let client_nonce = data.get("r").unwrap();
 
-            let data_store = store.items.read();
-            
-            // confirm will have token and username stored
-            if data_store.contains_key(client_handshake_token) {
-                if data_store.get(client_handshake_token).unwrap().username != client_username.to_string() {
-                    return_reponse_token!(401, client_handshake_token);
-                }  
+            let data_store = store.read();
+            let stored_username_result = data_store.get_username(client_handshake_token);
+
+            if stored_username_result.is_err() {
+                return_reponse_token!(401, &get_hanshake_token());
             }
+
+            if stored_username_result.unwrap() != client_username.to_string() {
+                return_reponse_token!(401, client_handshake_token);
+            }  
 
             drop(data_store);
 
@@ -432,9 +452,14 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
 
             debug!("salt_base64: {}", salt_base64);
 
-            store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().server_salt = Some(salt_base64.to_string());
-            store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().client_nonce = Some(client_nonce.to_string());
-            
+            if store.write().set_server_salt(Some(salt_base64.to_string())).is_err() {
+                return_reponse_token!(401, &get_hanshake_token());
+            }
+
+            if store.write().set_client_nonce(Some(client_nonce.to_string())).is_err() {
+                return_reponse_token!(401, &get_hanshake_token());
+            }
+    
             debug!("client_handshake_token: {}", client_handshake_token);
             debug!("client_username: {}", client_username);
             debug!("client_nonce: {}", client_nonce);
@@ -443,7 +468,10 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
 
             let message = format!("r={},s={},i=10000", concatenated_nonce, BASE64.encode(salt.as_bytes()));
 
-            store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().server_first_message = Some(message.to_string());
+            if store.write().set_server_first_message(Some(message.to_string())).is_err() {
+                return_reponse_token!(401, &get_hanshake_token());
+            }
+
             drop(store);
 
             let data = BASE64URL.encode(message.as_bytes());
@@ -507,20 +535,30 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
             // message) is authorized to act as the authentication identity, and,
             // finally, it responds with a "server-final-message", concluding the
             // authentication exchange.
-            let data_store = store.items.read();
+            let data_store = store.read();
 
             // We should have server_salt and client_nonce from last message
-            if !data_store.contains_key(client_handshake_token) {
+            let stored_server_salt_result = data_store.get_server_salt();
+            let stored_client_nonce_result = data_store.get_client_nonce();
+            let stored_client_first_message_result = data_store.get_client_first_message();
+            let stored_server_first_message_result = data_store.get_server_first_message();
+            let stored_client_final_no_pf_result = data_store.get_client_final_no_pf();
 
-                println!("No handshake token");
-
+            if stored_server_salt_result.is_err() || stored_client_nonce_result.is_err() 
+              || stored_client_first_message_result.is_err() || stored_server_first_message_result.is_err()
+              || stored_client_final_no_pf_result.is_err() {
                 return_reponse_token!(401, client_handshake_token);
             }
 
-            let stored_data = data_store.get(client_handshake_token).unwrap();
+            let stored_server_salt_option = stored_server_salt_result.unwrap();
+            let stored_client_nonce_option = stored_client_nonce_result.unwrap();
+            let stored_client_first_message_option = stored_client_first_message_result.unwrap();
+            let stored_server_first_message_option = stored_server_first_message_result.unwrap();
+            let stored_client_final_no_pf_option = stored_client_final_no_pf_result.unwrap();
 
-            if stored_data.server_salt.is_none() || stored_data.client_nonce.is_none() {
-
+            if stored_server_salt_option.is_none() || stored_client_nonce_option.is_none()
+              || stored_client_first_message_option.is_none() || stored_server_first_message_option.is_none()
+              || stored_client_final_no_pf_option.is_none() {
                 debug!("No salt or nonce");
                 return_reponse_token!(401, client_handshake_token);
             }
@@ -532,14 +570,14 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
             let password: String = stringprep::saslprep("pencil").unwrap().to_string();
 
             let auth_message: String = format!("{},{},{}", 
-                &stored_data.client_first_message.clone().unwrap().to_string(),
-                &stored_data.server_first_message.clone().unwrap().to_string(),
-                &stored_data.client_final_no_pf.clone().unwrap().to_string());
+                    &stored_client_first_message_option.unwrap().to_string(),
+                    &stored_server_first_message_option.unwrap().to_string(),
+                    &stored_client_final_no_pf_option.unwrap().to_string());
 
             debug!("auth_message: {:?}", &auth_message.to_string());
 
-            let salt_base64 = stored_data.server_salt.clone().unwrap().to_string();
-
+            let salt_base64 = stored_server_salt_option.unwrap().to_string();
+     
             debug!("salt_base64: {:?}", &salt_base64.to_string());
 
             let salt: Vec<u8> = BASE64.decode(salt_base64.as_bytes()).unwrap();
@@ -610,7 +648,7 @@ async fn haystack_authentication(header: String, store: Store) -> Result<impl wa
                 let response = warp::reply::with_status("Auth successful", http::StatusCode::from_u16(200).unwrap());
                 let response = warp::reply::with_header(response, "Authentication-Info", message);
 
-                store.items.write().get_mut(&client_handshake_token.to_string()).unwrap().auth_token = Some("jdudnsu".to_string());
+                store.write().set_authtoken(Some("jdudnsu".to_string()));
 
                 debug!("response: {:?}", response);
 
@@ -939,7 +977,9 @@ struct GridSerialisationError;
 impl reject::Reject for GridSerialisationError {}
 
 
-pub async fn serve() {
+
+
+pub async fn serve(store: Store) {
 
     // if env::var_os("RUST_LOG").is_none() {
     //     // Set `RUST_LOG=todos=debug` to see debug logs,
@@ -956,8 +996,8 @@ pub async fn serve() {
         .allow_methods(vec!["GET", "PUT", "POST", "DELETE"])
         .max_age(Duration::from_secs(600));
 
-    let store = Store::new();
-    let store_filter = warp::any().map(move || store.clone());
+    //let store = Store::new();
+    let store_filter = warp::any().map(move || store.clone() );
 
     let default_auth = warp::any().map(|| {
         // something default

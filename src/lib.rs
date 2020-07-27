@@ -20,10 +20,10 @@ extern crate ring;
 
 extern crate escape8259;
 
-mod error;
-mod token;
-mod hval;
-mod zinc_tokenizer;
+pub mod error;
+pub mod token;
+pub mod hval;
+pub mod zinc_tokenizer;
 pub mod server;
 
 
