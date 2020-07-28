@@ -87,6 +87,6 @@ async fn main() {
 
     let store = Arc::new(RwLock::new(Box::new(DemoAuthDetails::new()) as Box<dyn UserAuthStore>));
 
-    server::serve(store).await;
+    server::serve(store.clone()).await;
 }
 

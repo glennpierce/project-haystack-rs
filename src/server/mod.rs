@@ -974,11 +974,11 @@ pub async fn historical_write (
     Ok(response)
 }
 
-async fn hello(token: String, store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+async fn hello(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 
     let response = warp::reply::with_status("Hello", http::StatusCode::from_u16(200).unwrap());
 
-    println!("response: {:?} token: {:?}  store: {:?}", response, token, store);
+    println!("response: {:?} store: {:?}", response, store);
 
     return Ok(response);
 }
@@ -989,20 +989,81 @@ struct HayStackAuthToken;
 
 impl reject::Reject for HayStackAuthToken {}
 
-pub fn haystack_auth_header() -> impl Filter<Extract = (String,), Error = Rejection> + Copy {
 
-    warp::header("Authorization").and_then(|auth_header: String| async move {
+pub fn haystack_auth_header(store: Store) -> impl Filter<Extract = (Store,), Error = Rejection> + Clone {
 
-        // Authorization: BEARER authToken=xxxyyyzzz
-        let result = auth_token(&auth_header); //-> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
+    warp::header("Authorization").and_then (
+        
+            move |auth_header: String| 
+            {
+                let tmp = store.clone();
+                async move {
 
-        if result.is_err() {
-            return Err(reject::custom(HayStackAuthToken));
-        }
+                    let tmp = tmp.clone();
 
-        let (_, key_value) = result.unwrap();
-        Ok(key_value.1.to_string())
-    })
+                    // Authorization: BEARER authToken=xxxyyyzzz
+                    let result = auth_token(&auth_header); //-> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
+
+                    if result.is_err() {
+                        return Err(reject::custom(HayStackAuthToken));
+                    }
+            
+                    let (_, key_value) = result.unwrap();
+            
+                    let auth_token_result = tmp.read().get_authtoken();
+            
+                    if auth_token_result.is_err() {
+                        return Err(reject::custom(HayStackAuthToken));
+                    }
+            
+                    let auth_token_option = auth_token_result.unwrap();
+            
+                    if auth_token_option.is_none() {
+                        return Err(reject::custom(HayStackAuthToken));
+                    }
+            
+                    let auth_token = auth_token_option.unwrap();
+            
+                    if auth_token != key_value.1 {
+                        return Err(reject::custom(HayStackAuthToken));
+                    }
+            
+                    Ok(tmp.clone())
+                }
+            }
+    )
+}
+
+
+// This function receives a `Rejection` and tries to return a custom
+// value, otherwise simply passes the rejection along.
+async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
+    let code;
+    let message;
+
+    if err.is_not_found() {
+        code = StatusCode::NOT_FOUND;
+        message = "NOT_FOUND";
+    } 
+    // else if let Some(DivideByZero) = err.find() {
+    //     code = StatusCode::BAD_REQUEST;
+    //     message = "DIVIDE_BY_ZERO";
+    // } 
+    else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        // We can handle a specific error, here METHOD_NOT_ALLOWED,
+        // and render it however we want
+        code = StatusCode::METHOD_NOT_ALLOWED;
+        message = "METHOD_NOT_ALLOWED";
+    } else {
+        // We should have expected this... Just log and say its a 500
+        eprintln!("unhandled rejection: {:?}", err);
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "UNHANDLED_REJECTION";
+    }
+
+    let response = warp::reply::with_status(Grid::empty().to_zinc(), http::StatusCode::from_u16(400).unwrap());
+   
+    Ok(response)
 }
 
 #[derive(Debug)]
@@ -1011,7 +1072,9 @@ struct GridSerialisationError;
 impl reject::Reject for GridSerialisationError {}
 
 
-
+fn with_store(store: Store) -> impl Filter<Extract = (Store,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || store.clone())
+}
 
 pub async fn serve(store: Store) {
 
@@ -1031,72 +1094,71 @@ pub async fn serve(store: Store) {
         .max_age(Duration::from_secs(600));
 
     //let store = Store::new();
-    let store_filter = warp::any().map(move || store.clone() );
+   // let store_filter = warp::any().map(move || store.clone() );
 
     let default_auth = warp::any().map(|| {
         // something default
         "".to_string()
     });
         
-    let ui_route = warp::path("ui")
-        .and(warp::path::end())
-        .and(warp::header("Authorization"))
-        .or(default_auth)
-        .unify()
-        .and(store_filter.clone())
-        .and_then(haystack_authentication);
+    // let ui_route = warp::path("ui")
+    //     .and(warp::path::end())
+    //     .and(warp::header("Authorization"))
+    //     .or(default_auth)
+    //     .unify()
+    //     .and(store_filter.clone())
+    //     .and_then(haystack_authentication);
 
     let hello_route = warp::path("hello")
             .and(warp::path::end())
-            .and(haystack_auth_header())
-            .map(|token: String| { token })
-            .and(store_filter.clone())
-            .and_then(hello);
+            .and(haystack_auth_header(store.clone()))
+            .and_then(hello).recover(handle_rejection);
 
-    let about_route = warp::path("about")
-            .and(warp::path::end())
-            .and(haystack_auth_header())
-            .map(|token: String| { token })
-            .and(store_filter.clone())
-            .and_then(about);
+    // let about_route = warp::path("about")
+    //         .and(warp::path::end())
+    //         .and(haystack_auth_header())
+    //         .map(|token: String| { token })
+    //         .and(store_filter.clone())
+    //         .and_then(about);
 
-    let ops_route = warp::path("ops")
-            .and(warp::path::end())
-            .and(haystack_auth_header())
-            .map(|token: String| { token })
-            .and(store_filter.clone())
-            .and_then(ops);      
+    // let ops_route = warp::path("ops")
+    //         .and(warp::path::end())
+    //         .and(haystack_auth_header())
+    //         .map(|token: String| { token })
+    //         .and(store_filter.clone())
+    //         .and_then(ops);      
 
-    let formats_route = warp::path("formats")
-            .and(warp::path::end())
-            .and(haystack_auth_header())
-            .map(|token: String| { token })
-            .and(store_filter.clone())
-            .and_then(formats);        
+    // let formats_route = warp::path("formats")
+    //         .and(warp::path::end())
+    //         .and(haystack_auth_header())
+    //         .map(|token: String| { token })
+    //         .and(store_filter.clone())
+    //         .and_then(formats);        
             
-    // curl -X POST http://127.0.0.1:4337/hisRead -H "authorization: BEARER authToken=7e0d0ab09e04776c50681f61cc2e66b0d216fbcc" --data $'ver:"3.0"\nid,range\n@someTemp,"2012-10-01"'
-    let his_read_route = warp::post()
-            .and(warp::path("hisRead"))
-            .and(warp::path::end())
-            // Only accept bodies smaller than 16kb...
-            .and(warp::body::content_length_limit(1024 * 16))
-            .and(haystack_auth_header())
-            .and(store_filter.clone())
-            .and(warp::body::bytes())
-            .and_then(historical_read);
+    // // curl -X POST http://127.0.0.1:4337/hisRead -H "authorization: BEARER authToken=7e0d0ab09e04776c50681f61cc2e66b0d216fbcc" --data $'ver:"3.0"\nid,range\n@someTemp,"2012-10-01"'
+    // let his_read_route = warp::post()
+    //         .and(warp::path("hisRead"))
+    //         .and(warp::path::end())
+    //         // Only accept bodies smaller than 16kb...
+    //         .and(warp::body::content_length_limit(1024 * 16))
+    //         .and(haystack_auth_header())
+    //         .and(store_filter.clone())
+    //         .and(warp::body::bytes())
+    //         .and_then(historical_read);
 
-    let his_write_route = warp::post()
-            .and(warp::path("hisWrite"))
-            .and(warp::path::end())
-            // Only accept bodies smaller than 16kb...
-            .and(warp::body::content_length_limit(1024 * 16))
-            .and(haystack_auth_header())
-            .and(store_filter.clone())
-            .and(warp::body::bytes())
-            .and_then(historical_write);
+    // let his_write_route = warp::post()
+    //         .and(warp::path("hisWrite"))
+    //         .and(warp::path::end())
+    //         // Only accept bodies smaller than 16kb...
+    //         .and(warp::body::content_length_limit(1024 * 16))
+    //         .and(haystack_auth_header())
+    //         .and(store_filter.clone())
+    //         .and(warp::body::bytes())
+    //         .and_then(historical_write);
 
     //let api = hello_route.or(about_route).or(ui_route); //.or(create).or(update).or(delete);
-    let api = hello_route.or(about_route).or(ops_route).or(formats_route).or(his_read_route).or(his_write_route).or(ui_route);
+    //let api = hello_route.or(about_route).or(ops_route).or(formats_route).or(his_read_route).or(his_write_route).or(ui_route);
+    let api = hello_route;
 
     // View access logs by setting `RUST_LOG=todos`.
     let routes = api.with(warp::log("webserver")).with(cors);
