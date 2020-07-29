@@ -1005,21 +1005,16 @@ pub fn haystack_auth_header(store: Store) -> impl Filter<Extract = (Store,), Err
 
 // This function receives a `Rejection` and tries to return a custom
 // value, otherwise simply passes the rejection along.
-pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
+pub async fn handle_rejection(err: Rejection) -> Result<http::response::Response<String>, Infallible> {
     let code;
 
     debug!("handle_rejection");
-
-    let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert("content-type", "text/zinc".parse().unwrap());
 
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
     } 
     else if let Some(HayStackAuthRejection) = err.find() {
         code = StatusCode::UNAUTHORIZED;
-        let value: String = format!("SCRAM hash=SHA-256, handshakeToken={}", get_hanshake_token());
-        headers.insert("WWW-Authenticate", value.parse().unwrap());
     } 
     else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
         // We can handle a specific error, here METHOD_NOT_ALLOWED,
@@ -1031,9 +1026,17 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         code = StatusCode::INTERNAL_SERVER_ERROR;
     }
 
-    let response = warp::reply::with_status(Grid::empty().to_zinc(), code);
+    let mut builder = Response::builder()
+        .header("Content-Type", "text/zinc");
 
-    Ok(response)
+    builder = builder.status(code);
+
+    if code == StatusCode::UNAUTHORIZED {
+        let header = format!("SCRAM hash=SHA-256, handshakeToken={}", get_authtoken());
+        builder = builder.header("WWW-Authenticate", header);
+    }
+
+    Ok(builder.body(Grid::empty().to_zinc()).unwrap())
 }
 
 #[derive(Debug)]
