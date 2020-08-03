@@ -335,11 +335,9 @@ pub trait UserAuthStore: fmt::Debug + Send + Sync {
 pub type Store = Arc<RwLock<Box<dyn UserAuthStore>>>;
 
 
-/// returns a base64 encoded sha256 salt of password. 
+/// returns a password sha256 signed. 
 pub fn haystack_generate_salted_password(password: &str, salt: &[u8], iterations: u32) -> Vec<u8>
 {
-    //let salt: Vec<u8> = BASE64.decode(salt_base64.to_string().as_bytes()).unwrap();
-
     let password_prep: String = stringprep::saslprep(password).unwrap().to_string();
     
     let PBKDF2_ALG: ring::pbkdf2::Algorithm = ring::pbkdf2::PBKDF2_HMAC_SHA256;
@@ -355,7 +353,16 @@ pub fn haystack_generate_salted_password(password: &str, salt: &[u8], iterations
 }
 
 #[derive(Debug)]
-struct HayStackRejection;
+pub struct HayStackRejection {
+    error: String,
+}
+
+impl HayStackRejection {
+
+    pub fn new(err: &str) -> Self {
+        HayStackRejection {error: err.to_string()}
+    }
+}
 
 impl reject::Reject for HayStackRejection {}
 
