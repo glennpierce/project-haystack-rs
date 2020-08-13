@@ -1164,6 +1164,22 @@ mod tests {
     }
 
     #[test]
+    fn grid_his_read_test() {
+        use super::*;
+
+        assert_nom_fn_eq_no_remain_check!(
+            grid(
+                r#"ver:"3.0"
+                id,range
+                @someTemp,"2012-10-01,2012-10-03""#
+            ),
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(1.0, ""), Number(2.0, ""), Number(3.0, "")])])]))"#
+        );
+
+
+    }
+
+    #[test]
     fn it_works() {
         use super::*;
 
