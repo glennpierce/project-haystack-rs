@@ -1,19 +1,14 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, FixedOffset, TimeZone, Utc};
-
-use dtparse::parse;
-use dtparse::ParseError;
-
-use nom_unicode;
+use chrono::{DateTime, NaiveDate, FixedOffset, Utc};
 
 use std::fmt;
 use std::f64;
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::BTreeMap;
 
 use crate::hval::{HVal};
 
 /// An error reported by the parser.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum TokenParseError {
     /// A token that is not allowed at the given location (contains the location of the offending
     /// character in the source string).
@@ -76,14 +71,14 @@ pub enum Token {
 
     Bool(bool),
 
-    INF,
+    Inf,
 
-    INF_NEG,
+    InfNeg,
 
-    NAN,
+    NaN,
 
     Comma,
- 
+
     /// A number and units
     Number(f64, String),
     /// A variable.
@@ -118,9 +113,9 @@ impl fmt::Display for Token {
             Token::NL => write!(f, "\n"),
             Token::NA => write!(f, "NA"),
             Token::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
-            Token::INF => write!(f, "INF"),
-            Token::INF_NEG => write!(f, "-INF"),
-            Token::NAN => write!(f, "NAN"),
+            Token::Inf => write!(f, "Inf"),
+            Token::InfNeg => write!(f, "-Inf"),
+            Token::NaN => write!(f, "NaN"),
             Token::Comma => write!(f, ","),
             Token::Number(num, units) => write!(f, "{}{}", num, units),
             Token::Id(val) => write!(f, "{}", val),
@@ -164,9 +159,9 @@ impl HVal for Token {
             Token::NA => "NA".to_string(),
             Token::NL => "\n".to_string(),
             Token::Bool(b) => if *b { "T".to_string() } else { "F".to_string() },
-            Token::INF => "INF".to_string(),
-            Token::INF_NEG => "-INF".to_string(),
-            Token::NAN => "NaN".to_string(),
+            Token::Inf => "Inf".to_string(),
+            Token::InfNeg => "-Inf".to_string(),
+            Token::NaN => "NaN".to_string(),
             Token::Comma => ",".to_string(),
             Token::Number(num, units) => format!("{}{}", num, units),
             Token::Id(val) => format!("{}", val),

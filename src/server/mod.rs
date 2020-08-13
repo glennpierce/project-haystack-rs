@@ -1051,11 +1051,6 @@ struct GridSerialisationError;
 
 impl reject::Reject for GridSerialisationError {}
 
-
-fn with_store(store: Store) -> impl Filter<Extract = (Store,), Error = std::convert::Infallible> + Clone {
-    warp::any().map(move || store.clone())
-}
-
 pub async fn serve(store: Store) {
 
     // if env::var_os("RUST_LOG").is_none() {
