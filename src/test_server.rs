@@ -29,11 +29,11 @@ impl DemoAuthDetails {
 }
 
 impl UserAuthStore for DemoAuthDetails {
-    fn get_handshake_token(&self, username: &str) -> HaystackResult<String> {
+    fn get_handshake_token(&self, _username: &str) -> HaystackResult<String> {
         Ok(self.handshake_token.clone())
     }
 
-    fn get_username(&self, handshake_token: &str) -> HaystackResult<String> {
+    fn get_username(&self, _handshake_token: &str) -> HaystackResult<String> {
         // fn get_handshake_token_for_haystack_username(&self, username: &str) -> Result<String, BmosError> {
         Ok("user".into())
     }

@@ -7,17 +7,10 @@ use nom::{
     combinator::{complete, map, opt, peek, recognize},
     error::ErrorKind,
     multi::{many1, separated_list},
-    sequence::{delimited, preceded, separated_pair, terminated, tuple},
-    Err, IResult,
+    sequence::{delimited, preceded, separated_pair, terminated, tuple}, IResult,
 };
 
-use escape8259::{escape, unescape};
-
-use std::collections::HashMap;
-
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone, Utc};
-use dtparse::parse;
-use dtparse::ParseError;
+use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Utc};
 
 use crate::hval::HVal;
 use crate::token::*;
@@ -41,17 +34,6 @@ where
 {
     delimited(multispace0, f, multispace0)
 }
-
-// fn val_map<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, X, E>
-// where
-//     F: Fn(I) -> IResult<I, O, E>,
-//     I: nom::InputTakeAtPosition,
-//     X: Val,
-//     <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
-//     E: nom::error::ParseError<I>,
-// {
-//     map(f, |v| { Val::new(Box::new(v) as Box<dyn HVal>) })(i)
-// }
 
 fn comma<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tag(","), |_: &str| Token::Comma)(i)
@@ -167,33 +149,38 @@ fn date_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((digit1, char('-'), digit1, char('-'), digit1)))(i)
 }
 
-// "{date},{date}"
-// Ie 2011-06-07, 2011-06-08
-fn date_range_s<'a>(i: &'a str) -> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
-    separated_pair(date_s, char(','), date_s)(i)
-}
-
 fn date<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(date_s, |s: &str| {
         Token::Date(dtparse::parse(s).unwrap().0.date())
     })(i)
 }
 
-// Have extended project haystack spec here. I will find it use to have the foloowing
-// thisweek result from last sunday midnight
-// thismonth
-// thisyear
-// fn date_const_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
-//     map(alt((tag("today"), tag("yesterday"), tag("thisweek"), tag("thismonth"), tag("thisyear"))),
-//         |s: &str|
-//         {
-//             match s.as_ref() {
-//                 "today" => Utc::today().to_string().as_ref(),
-//                 //_ => Err(nom::Err::Error(("Date Const Error", ErrorKind::Tag)))
-//             }
+// "{date},{date}"
+// Ie 2011-06-07, 2011-06-08
+fn date_range_s<'a>(i: &'a str) -> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
+    separated_pair(date_s, char(','), date_s)(i)
+}
 
-//         } )(i)
-// }
+
+// let dt = tmp
+// .1
+// .expect("Timezone is None")
+// .from_local_datetime(&tmp.0)
+// .unwrap();
+
+fn naive_datetime_to_fixed_offset(dt: NaiveDateTime) -> DateTime::<FixedOffset> {
+    let u = DateTime::<Utc>::from_utc(dt, Utc);
+    DateTime::<FixedOffset>::from(u)
+}
+
+fn date_range<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(date_range_s, |t: (&str, &str)| {
+        (
+            Token::DateTime(naive_datetime_to_fixed_offset(dtparse::parse(t.0).unwrap().0.date().and_hms(0,0,0))),
+            Token::DateTime(naive_datetime_to_fixed_offset(dtparse::parse(t.1).unwrap().0.date().and_hms(0,0,0)))
+        )
+    })(i)
+}
 
 fn hours_minutes_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((digit1, char(':'), digit1)))(i)
@@ -250,43 +237,117 @@ fn datetime_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)>
     )(i)
 }
 
+fn str_to_datetime_token(s: &str) -> Token {
+    // First split off tz name at space
+    let vec: Vec<&str> = s.split(' ').collect::<Vec<&str>>();
+
+    let tmp: (NaiveDateTime, Option<FixedOffset>);
+
+    if vec.len() > 1 {
+        tmp = dtparse::parse(vec[0]).unwrap();
+    } else {
+        tmp = dtparse::parse(s).unwrap();
+    }
+
+    let dt = tmp
+        .1
+        .expect("Timezone is None")
+        .from_local_datetime(&tmp.0)
+        .unwrap();
+
+    Token::DateTime(dt)
+}
+
+fn datetime<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+    map(datetime_s, |s: &str| {
+        str_to_datetime_token(s)
+    })(i)
+}
+
 // "{dateTime},{dateTime}"
 // Ie 2011-06-07T09:51:27-04:00, 2011-06-09T09:51:27-04:00
 fn datetime_range_s<'a>(i: &'a str) -> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
     separated_pair(datetime_s, char(','), datetime_s)(i)
 }
 
-fn datetime<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
-    map(datetime_s, |s: &str| {
-        // First split off tz name at space
-        let vec: Vec<&str> = s.split(' ').collect::<Vec<&str>>();
-
-        let tmp: (NaiveDateTime, Option<FixedOffset>);
-
-        if vec.len() > 1 {
-            tmp = dtparse::parse(vec[0]).unwrap();
-        } else {
-            tmp = dtparse::parse(s).unwrap();
-        }
-
-        let dt = tmp
-            .1
-            .expect("Timezone is None")
-            .from_local_datetime(&tmp.0)
-            .unwrap();
-
-        Token::DateTime(dt)
-    })(i)
+fn datetime_range<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(datetime_range_s, |t: (&str, &str)| {
+        (str_to_datetime_token(t.0), str_to_datetime_token(t.1))
+    }
+    )(i)
 }
 
-// // Used for HisRead and HisWrite
-// fn range_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
-//     map(recognize(tuple((date, char('T'), time_with_subseconds, timezone_s))), |s: &str| s)(i)
-// }
+fn utc_date_floor(dt: Date<Utc>) -> DateTime::<FixedOffset> {
+    let midnight = dt.and_hms(0,0,0);
+    DateTime::<FixedOffset>::from(midnight)
+}
 
-// fn token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
-//     alt((zinc_ref, quoted_string, uri, datetime, date, zinc_number, bool, na, null, marker, remove))(i)
-// }
+fn range_today<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("today"), |_: &str| (Token::DateTime(utc_date_floor(Utc::today())), Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))))(i)
+}
+
+fn range_yesterday<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("yesterday"), |_: &str| {
+        (
+            Token::DateTime(utc_date_floor(Utc::today() - chrono::Duration::days(1))),
+            Token::DateTime(utc_date_floor(Utc::today()))
+        )
+        }
+    )(i)
+}
+
+fn range_thisweek<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    
+    map(tag("thisweek"), |_: &str| {
+            let weekday: chrono::Weekday = Utc::today().weekday();
+            let number_of_days_from_sunday: u32 = weekday.num_days_from_sunday();
+        
+            (Token::DateTime(utc_date_floor(Utc::today() - chrono::Duration::days(number_of_days_from_sunday as i64))),
+             Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+            )
+        }
+    )(i)
+}
+
+fn range_thismonth<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("thismonth"), |_: &str| {
+        (
+            Token::DateTime(utc_date_floor(Utc::today().with_day(1).unwrap())),
+            Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+        )
+    }
+    )(i)
+}
+
+fn range_thisyear<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("thisyear"), |_: &str| {
+        (Token::DateTime(utc_date_floor(Utc::today().with_day(1).unwrap().with_month(1).unwrap())),
+         Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+        )
+    }
+    )(i)
+}
+
+fn date_range_const<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    alt((
+        range_today,
+        range_yesterday,
+        range_thisweek,
+        range_thismonth,
+        range_thisyear,
+        datetime_range,
+        date_range,
+        map(datetime_s, |s: &str| (str_to_datetime_token(s), Token::DateTime(DateTime::<FixedOffset>::from(Utc::now())))),
+        map(date_s, |s: &str| {
+            
+            (
+                Token::DateTime(naive_datetime_to_fixed_offset(dtparse::parse(s).unwrap().0.date().and_hms(0,0,0))),
+                Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+            )
+            }
+        ),
+    ))(i)
+}
 
 fn ident<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     let remaining_chars: &str = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -676,6 +737,54 @@ mod tests {
     fn date_test() {
         use super::*;
 
+        let t = DateTime::<FixedOffset>::from(Utc::now());
+
+        //assert_eq!(date_today("today"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_yesterday("yesterday"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_thisweek("thisweek"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_thismonth("thismonth"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(range_thisyear("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+        
+       // assert_eq!(date_range_const("thisweek"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("yesterday"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("2020-08-02,2020-08-06"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("2020-08-11T15:35:24.677428186+00:00,2020-08-12T12:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("2020-08-11T15:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_const("2020-08-11"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+
+        // fn date_today<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+        //     map(tag("today"), |_: &str| Token::DateTime(utc_date_floor(Utc::today())))(i)
+        // }
+        
+        // fn date_yesterday<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+        //     map(tag("yesterday"), |_: &str| Token::DateTime(utc_date_floor(Utc::today() - chrono::Duration::days(1))))(i)
+        // }
+        
+        // fn date_thisweek<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+            
+        //     map(tag("thisweek"), |_: &str| {
+        //             let weekday: chrono::Weekday = Utc::today().weekday();
+        //             let number_of_days_from_sunday: u32 = weekday.num_days_from_sunday();
+                
+        //             Token::DateTime(utc_date_floor(Utc::today() - chrono::Duration::days(number_of_days_from_sunday as i64)))
+        //         }
+        //     )(i)
+        // }
+        
+        // fn date_thismonth<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+        //     map(tag("thismonth"), |_: &str| Token::DateTime(utc_date_floor(Utc::today().with_day(1).unwrap())))(i)
+        // }
+        
+        // fn date_thisyear<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+        //     map(tag("thisyear"), |_: &str| Token::DateTime(utc_date_floor(Utc::today().with_month(1).unwrap())))(i)
+        // }
+
+
+
+
+
+
         assert_eq!(date_s("07-03-1978"), Ok(("", "07-03-1978")));
         assert_eq!(
             date_range_s("07-03-1978,07-04-1978"),
@@ -721,7 +830,7 @@ mod tests {
     #[test]
     fn list_test() {
         use super::*;
-        use Token::*;
+        
 
         assert_eq!(
             zinc_number("32143m"),
@@ -765,7 +874,7 @@ mod tests {
     #[test]
     fn dict_test() {
         use super::*;
-        use Token::*;
+        
 
         assert_eq!(
             zinc_number("32143m"),
@@ -871,7 +980,7 @@ mod tests {
     #[test]
     fn row_test() {
         use super::*;
-        use Token::*;
+        
 
         assert_nom_fn_eq!(
             row("1,2,4,5"),

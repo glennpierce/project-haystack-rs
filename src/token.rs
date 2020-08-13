@@ -341,7 +341,7 @@ impl Tag {
     pub fn new(ident: Token, value: Option<Token>) -> Self {
 
         match &ident {
-            Token::Id(id) => (),
+            Token::Id(_id) => (),
             _ => assert!(true),
         };
 
@@ -604,7 +604,7 @@ impl Col {
     pub fn new(id: Token, tags: Option<Tags>) -> Self {
 
         match &id {
-            Token::Id(s) => (),
+            Token::Id(_s) => (),
             _ => assert!(true),
         };
 
@@ -822,7 +822,7 @@ impl GridMeta {
     pub fn new(version: Token, metadata: Option<Tags>) -> Self {
 
         match &version {
-            Token::Ver(id) => (),
+            Token::Ver(_id) => (),
             _ => assert!(true),
         };
 

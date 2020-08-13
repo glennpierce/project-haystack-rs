@@ -9,17 +9,11 @@ use warp;
 use warp::{http::StatusCode, Filter, Buf, http::Response, Reply, Rejection, reject};
 use std::convert::Infallible;
 
-use http::header::{HeaderName, HeaderMap, HeaderValue, CONTENT_TYPE};
-
 use chrono::{DateTime, Local, FixedOffset, NaiveDateTime, TimeZone, Utc};
 
-use std::env;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
 
-use stringprep;
 use ring;
-
 use bytes;
 
 use crate::hval::{HVal};
@@ -27,29 +21,25 @@ use crate::token::*;
 use crate::error::*;
 
 use nom::{
-    named,
-    take_str,
     branch::alt,
-    bytes::complete::{escaped, take_while_m_n, is_a, tag, tag_no_case, take_while1},
-    character::{is_digit},
-    character::complete::{multispace0, multispace1, alphanumeric1, char, one_of, digit1, alpha1},
-    combinator::{complete, peek, recognize, map, opt},
+    bytes::complete::{is_a, tag, tag_no_case},
+    character::complete::{multispace0, char, one_of, alpha1},
+    combinator::{complete, recognize, map, opt},
     error::{ErrorKind},
-    number::complete::double,
-    multi::{many1, separated_list},
-    sequence::{delimited, preceded, tuple, terminated, separated_pair},
-    Err, IResult
+    multi::{separated_list},
+    sequence::{delimited, preceded, tuple, separated_pair},
+    IResult
   };
 
-use data_encoding::{BASE64, BASE64_NOPAD, BASE64URL, BASE64URL_NOPAD};
+use data_encoding::{BASE64, BASE64URL, BASE64URL_NOPAD};
 use data_encoding::Encoding;
 
 use std::iter;
 use rand::{Rng};         // The generic trait all random generators support.
 use rand::rngs::OsRng;   // Specific implementation of above for strong crypto.
 use rand::prelude::*;
-use rand::prelude::ThreadRng;
-use rand::distributions::{Alphanumeric, Standard};
+
+use rand::distributions::{Alphanumeric};
 
 use crate::zinc_tokenizer::grid;
 
@@ -220,7 +210,7 @@ pub fn nom_username_nonce_extractor<'a>(i: &'a Vec<(&'a str,&'a str)>) -> IResul
             println!("s {}", s);
 
             match gs2_header(&s) {
-                Ok( (remaining, gs2) ) => {
+                Ok( (remaining, _) ) => {
                     println!("remaining {}", remaining);
 
                     let data_split = nom_base64_pair_list(remaining);
@@ -235,7 +225,7 @@ pub fn nom_username_nonce_extractor<'a>(i: &'a Vec<(&'a str,&'a str)>) -> IResul
                         tmp.insert(j.0.to_string(), j.1.to_string());
                     }
                 },
-                Err(e) => return Err(nom::Err::Error(("bad", nom::error::ErrorKind::Tag)))
+                Err(_e) => return Err(nom::Err::Error(("bad", nom::error::ErrorKind::Tag)))
             }
         }
         else {
@@ -684,7 +674,7 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
 // productVersion: Str version of the server software product
 // moduleName: module which implements Haystack server protocol if its a plug-in to the product
 // moduleVersion: Str version of moduleName
-async fn about(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+async fn about(_store: Store) -> Result<impl warp::Reply, warp::Rejection> {
    
     let grid_metadata = GridMeta::new(Token::Ver("3.0".into()), None);
 
@@ -709,7 +699,7 @@ async fn about(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 // // FOpsOp
 // //////////////////////////////////////////////////////////////////////////
 
-async fn ops(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+async fn ops(_store: Store) -> Result<impl warp::Reply, warp::Rejection> {
    
     // ver:"3.0"
     // name,summary
@@ -745,7 +735,7 @@ async fn ops(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 // // FormatsOp
 // //////////////////////////////////////////////////////////////////////////
 
-async fn formats(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
+async fn formats(_store: Store) -> Result<impl warp::Reply, warp::Rejection> {
    
     // ver:"3.0"
     // mime,receive,send
@@ -832,7 +822,7 @@ async fn formats(store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 // 2012-10-01T00:45:00-04:00 New_York,75.0°F
 // ..
 pub async fn historical_read (
-    store: Store,
+    _store: Store,
     grid_bytes: bytes::Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
 
@@ -912,7 +902,7 @@ pub async fn historical_read (
 // 2012-04-21T08:45:00-04:00 New_York,76.3
 // curl -X POST http://127.0.0.1:4337/hisWrite -H "authorization: BEARER authToken=7e0d0ab09e04776c50681f61cc2e66b0d216fbcc" --data $'ver:"3.0" id:@hisId\nts,val\n2012-04-21T08:30:00-04:00,48.7'
 pub async fn historical_write (
-    store: Store,
+    _store: Store,
     grid_bytes: bytes::Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
 
@@ -934,7 +924,7 @@ pub async fn historical_write (
 
     // id: Ref identifier of historized point
     // range: Str encoding of a date-time range
-    let rows = grid.rows;
+    let _rows = grid.rows;
 
     // for r in rows.iter() {
     //     println!("{:?}", r);
@@ -1071,7 +1061,7 @@ pub async fn serve(store: Store) {
     let store_clone = store.clone();
     let store_filter = warp::any().map(move || store_clone.clone() );
 
-    let default_auth = warp::any().map(|| {
+    let _default_auth = warp::any().map(|| {
         // something default
         "".to_string()
     });
@@ -1155,7 +1145,7 @@ pub async fn serve(store: Store) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
 
     #[test]
     fn hello_nom_test() {
