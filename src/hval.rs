@@ -3,7 +3,7 @@ use std::fmt;
 
 use downcast_rs;
 
-pub trait HVal: fmt::Debug + fmt::Display + downcast_rs::Downcast
+pub trait HVal: fmt::Debug + fmt::Display + Send + downcast_rs::Downcast
 {
     fn clone_dyn(&self) -> Box<dyn HVal>;
 
