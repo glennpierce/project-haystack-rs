@@ -1173,7 +1173,7 @@ mod tests {
                 id,range
                 @someTemp,"2012-10-01,2012-10-03""#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(1.0, ""), Number(2.0, ""), Number(3.0, "")])])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("id"), Some([])), Col(Id("range"), Some([]))]), Rows([Row([Ref("@someTemp", None), EscapedString("2012-10-01,2012-10-03")])]))"#
         );
 
 
