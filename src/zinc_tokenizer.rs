@@ -328,7 +328,7 @@ fn range_thisyear<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, 
     )(i)
 }
 
-fn date_range_const<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+pub fn date_range_to_token<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
     alt((
         range_today,
         range_yesterday,
@@ -477,38 +477,11 @@ fn token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     ))(i)
 }
 
-// fn scalar<'a>(i: &'a str) -> IResult<&'a str, Box<dyn HVal>, (&'a str, ErrorKind)> {
-//     map(
-//         token,
-//         |t: Token| {
-//             Box::new(Scaler::new(t.clone())) as Box<dyn HVal>
-//         }
-//     )(i)
-// }
-
-// fn scalar<'a>(i: &'a str) -> IResult<&'a str, Box<dyn HVal>, (&'a str, ErrorKind)> {
-//     map(
-//         token,
-//         |t: Token| {
-//             Box::new(Scaler::new(t.clone())) as Box<dyn HVal>
-//         }
-//     )(i)
-// }
-
 fn scalar<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     map(token, |t: Token| {
-        Val::new(Box::new(Scaler::new(t.clone())) as Box<dyn HVal>)
+        Val::new(Box::new(t.clone()) as Box<dyn HVal>)
     })(i)
 }
-
-// fn scalar<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
-//     map(
-//         token,
-//         |t: Token| {
-//             Box::new(Scaler::new(t.clone())) as Box<dyn HVal>
-//         }
-//     )(i)
-// }
 
 // "id:@hisId"
 fn zinc_tag_pair<'a>(i: &'a str) -> IResult<&'a str, (Token, Option<Token>), (&'a str, ErrorKind)> {
@@ -609,17 +582,13 @@ fn val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     alt((sub_grid, list, dict, scalar))(i)
 }
 
-// pub struct Val {
-//     pub token: Box<dyn HVal>,
-// }
-
 fn cell<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     map(alt((val, peek(comma_val))), |v: Val| {
         let s = v.to_string();
 
         match s.as_ref() {
-            "," => Val::new(Box::new(Scaler::new(Token::Null)) as Box<dyn HVal>),
-            _ => v, // Val::new(Box::new(Scaler::new(t.clone())) as Box<dyn HVal>)
+            "," => Val::new(Box::new(Token::Null) as Box<dyn HVal>),
+            _ => v, 
         }
     })(i)
 }
@@ -745,13 +714,13 @@ mod tests {
         //assert_eq!(date_thismonth("thismonth"), Ok(("", Token::DateTime(t))));
         //assert_eq!(range_thisyear("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
         
-       // assert_eq!(date_range_const("thisweek"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("yesterday"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("2020-08-02,2020-08-06"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("2020-08-11T15:35:24.677428186+00:00,2020-08-12T12:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("2020-08-11T15:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
-       // assert_eq!(date_range_const("2020-08-11"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("thisweek"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("yesterday"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-02,2020-08-06"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11T15:35:24.677428186+00:00,2020-08-12T12:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11T15:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
 
         // fn date_today<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
         //     map(tag("today"), |_: &str| Token::DateTime(utc_date_floor(Utc::today())))(i)

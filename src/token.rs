@@ -5,6 +5,10 @@ use std::f64;
 
 use std::collections::BTreeMap;
 
+use std::ops::Index;
+
+use downcast_rs;
+
 use crate::hval::{HVal};
 
 /// An error reported by the parser.
@@ -150,7 +154,11 @@ impl HVal for Token {
         Box::new(self.clone()) as Box<dyn HVal>
     }
 
-   fn to_zinc(&self) -> String  {
+    fn type_name(&self) -> String {
+        "Token".to_string()
+    }
+
+    fn to_zinc(&self) -> String  {
         let result = match &*self {
             Token::Empty => "".to_string(),
             Token::Null => "N".to_string(),
@@ -235,6 +243,10 @@ impl HVal for Val {
         Box::new(Val::new(self.hval.clone_dyn())) as Box<dyn HVal>
     }
 
+    fn type_name(&self) -> String {
+        "Val".to_string()
+    }
+
     fn to_zinc(&self) -> String  {
         format!("{}", self.hval.to_zinc())
     }
@@ -246,53 +258,7 @@ impl HVal for Val {
 
 
 // ////////////////////////////////////////////////
-// ///
-pub struct Scaler {
-    pub token: Token,
-}
-
-impl Scaler {
-    pub fn new(t: Token) -> Self {
-
-        Scaler {
-            token: t,
-        }
-    }
-}
-
-impl fmt::Debug for Scaler {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.token)
-    }
-}
-
-impl fmt::Display for Scaler {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.token)
-    }
-}
-
-impl HVal for Scaler {
-
-    fn clone_dyn(&self) -> Box<dyn HVal> {
-
-        Box::new(Scaler::new(self.token.clone())) as Box<dyn HVal>
-    }
-
-    fn to_zinc(&self) -> String  {
-        format!("{:?}", self)
-    }
- 
-    fn to_json(&self) -> String  {
-        return  "".to_string();
-    }
-}
-
-
-////////////////////////////////
-// ///
 pub struct Comma {
-    //pub token: Token,
 }
 
 impl Comma {
@@ -318,6 +284,10 @@ impl HVal for Comma {
 
     fn clone_dyn(&self) -> Box<dyn HVal> {
         Box::new(Comma::new()) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Comma".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -373,6 +343,10 @@ impl HVal for Tag {
 
     fn clone_dyn(&self) -> Box<dyn HVal> {
         Box::new(Tag::new(self.ident.clone(), self.value.clone())) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Tag".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -444,6 +418,10 @@ impl HVal for Tags {
     fn clone_dyn(&self) -> Box<dyn HVal> {
         let tmp: Vec<Tag> = self.tags.clone().into_iter().map(|t| t.clone()).collect();
         Box::new(Tags::new(&tmp)) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Tags".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -525,6 +503,10 @@ impl HVal for Dict {
         Box::new(self.clone()) as Box<dyn HVal>
     }
 
+    fn type_name(&self) -> String {
+        "Dict".to_string()
+    }
+
     fn to_zinc(&self) -> String  {
 
         let s = self.map.iter().map(|t: (&String, &Option<Tag>)| {
@@ -575,6 +557,10 @@ impl HVal for List {
     fn clone_dyn(&self) -> Box<dyn HVal> {
         let tmp: Vec<Val> = self.vals.clone().into_iter().map(|v| v.clone()).collect();
         Box::new(List::new(tmp)) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "List".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -633,6 +619,10 @@ impl HVal for Col {
         Box::new(Col::new(self.id.clone(), self.tags.clone())) as Box<dyn HVal>
     }
 
+    fn type_name(&self) -> String {
+        "Col".to_string()
+    }
+
     fn to_zinc(&self) -> String  {
         if self.tags.is_some() {
             format!("{}:{}", self.id.to_zinc(), self.tags.clone().unwrap().to_zinc())
@@ -682,6 +672,10 @@ impl HVal for Cols {
         Box::new(Cols::new(tmp)) as Box<dyn HVal>
     }
 
+    fn type_name(&self) -> String {
+        "Cols".to_string()
+    }
+
     fn to_zinc(&self) -> String  {
      
         let s = self.cols.iter().map(|c: &Col| {
@@ -713,6 +707,18 @@ impl Row {
             cells: cells,
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.cells.len()
+    }
+}
+
+impl Index<usize> for Row {
+    type Output = Val;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.cells[index]
+    }
 }
 
 impl Clone for Row {
@@ -740,6 +746,10 @@ impl HVal for Row {
         // Box::new(Row::new(tmp)) as Box<dyn HVal>
 
         Box::new(self.clone()) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Row".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -771,6 +781,18 @@ impl Rows {
             rows: rows,
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+}
+
+impl Index<usize> for Rows {
+    type Output = Row;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.rows[index]
+    }
 }
 
 impl fmt::Debug for Rows {
@@ -791,6 +813,10 @@ impl HVal for Rows {
     fn clone_dyn(&self) -> Box<dyn HVal> {
         let tmp: Vec<Row> = self.rows.clone().into_iter().map(|r| r.clone()).collect();
         Box::new(Rows::new(tmp)) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Rows".to_string()
     }
 
     fn to_zinc(&self) -> String  {
@@ -851,6 +877,10 @@ impl HVal for GridMeta {
         Box::new(self.clone()) as Box<dyn HVal>
     }
 
+    fn type_name(&self) -> String {
+        "GridMeta".to_string()
+    }
+
     fn to_zinc(&self) -> String  {
         if self.metadata.is_some() {
             format!("{} {}", self.version.to_zinc(), self.metadata.clone().unwrap().to_zinc())
@@ -909,6 +939,10 @@ impl HVal for Grid {
 
     fn clone_dyn(&self) -> Box<dyn HVal> {
         Box::new(self.clone()) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "Grid".to_string()
     }
 
     fn to_zinc(&self) -> String  {

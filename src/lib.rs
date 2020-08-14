@@ -8,6 +8,9 @@ extern crate nom_unicode;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate downcast_rs;
+
 extern crate data_encoding;
 
 extern crate rand;

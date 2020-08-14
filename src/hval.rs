@@ -1,9 +1,13 @@
 
 use std::fmt;
 
-pub trait HVal: fmt::Debug + fmt::Display
+use downcast_rs;
+
+pub trait HVal: fmt::Debug + fmt::Display + downcast_rs::Downcast
 {
     fn clone_dyn(&self) -> Box<dyn HVal>;
+
+    fn type_name(&self) -> String ;
 
     // Encode value to zinc format
     fn to_zinc(&self) -> String ;
@@ -11,3 +15,5 @@ pub trait HVal: fmt::Debug + fmt::Display
     // Encode to JSON string value
     fn to_json(&self) -> String ;
 }
+
+impl_downcast!(HVal);

@@ -9,6 +9,7 @@ name = "libproject_haystack_rs"
 path = "src/lib.rs"
 
 [dependencies]
+downcast-rs = "*"
 bytes = "*"
 escape8259 = "*"
 ring = "0.16.15"
