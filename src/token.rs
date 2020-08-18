@@ -614,6 +614,14 @@ impl fmt::Display for List {
     }
 }
 
+impl Index<usize> for List {
+    type Output = Val;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.vals[index]
+    }
+}
+
 impl HVal for List {
 
     fn clone_dyn(&self) -> Box<dyn HVal> {
