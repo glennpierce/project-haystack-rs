@@ -217,6 +217,19 @@ impl Val {
             hval: t,
         }
     }
+
+    pub fn child_type_name(&self) -> String {
+        self.hval.type_name()
+    }
+
+    pub fn is_a(&self, s: &str) -> bool {
+        self.hval.type_name() == s
+    }
+
+    pub fn cast_to_type_ref<T>(&self) -> Option<&T>
+        where T: HVal {
+        self.hval.downcast_ref::<T>()
+    }
 }
 
 impl Clone for Val {
@@ -300,15 +313,14 @@ impl HVal for Comma {
 }
 
 // ///////////////////////////////////
-/// 
-#[derive(PartialEq, Clone)]
+
 pub struct Tag {
     pub ident: Token,
-    pub value: Option<Token>
+    pub value: Option<Val>
 }
 
 impl Tag {
-    pub fn new(ident: Token, value: Option<Token>) -> Self {
+    pub fn new(ident: Token, value: Option<Val>) -> Self {
 
         match &ident {
             Token::Id(_id) => (),
@@ -318,6 +330,34 @@ impl Tag {
         Tag {
             ident: ident.clone(),
             value: value.clone(),
+        }
+    }
+
+    pub fn new_from_token(ident: Token, value: Token) -> Self {
+
+        match &ident {
+            Token::Id(_id) => (),
+            _ => assert!(true),
+        };
+
+        Tag {
+            ident: ident.clone(),
+            value: Some(Val::new(value.clone_dyn())),
+        }
+    }
+}
+
+impl PartialEq for Tag {
+    fn eq(&self, other: &Self) -> bool {
+        self.ident == other.ident
+    }
+}
+
+impl Clone for Tag {
+    fn clone(&self) -> Self {
+        Tag {
+            ident: self.ident.clone(),
+            value: self.value.clone(),
         }
     }
 }
@@ -364,7 +404,7 @@ impl HVal for Tag {
 }
 
 ////////////////////////////////////
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct Tags {
     tags: Vec<Tag>,
 }
@@ -538,6 +578,28 @@ impl List {
     pub fn new(vals: Vec<Val>) -> Self {
         List{vals: vals}
     }
+
+    pub fn new_from_tokens(tokens: Vec<Token>) -> Self {
+        List::new(tokens.iter().map(|t| Val::new(Box::new(t.clone()))).collect())
+    }
+
+    /// Fails in types in vals are not all the same
+    pub fn cast_to_type_ref<T>(&self) -> Option<Vec<&T>>
+        where T: HVal {
+        let mut l: Vec<&T> = vec![];
+
+        for v in self.vals.iter() {
+            let r = v.cast_to_type_ref();
+
+            if r.is_none() {
+                return None;
+            }
+
+            l.push(r.unwrap())
+        }
+
+        Some(l)
+    }
 }
 
 impl fmt::Debug for List {
@@ -580,7 +642,7 @@ impl HVal for List {
 
 // Col(Box<Token>, Box<Vec<Token>>),
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct Col {
     pub id: Token,
     pub tags: Option<Tags>
@@ -598,6 +660,12 @@ impl Col {
             id: id.clone(),
             tags: tags.clone(),
         }
+    }
+}
+
+impl PartialEq for Col {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 

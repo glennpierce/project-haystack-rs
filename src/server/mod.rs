@@ -849,15 +849,15 @@ pub async fn historical_read (
     println!("{}", rows);
 
     //let non_ref = Token::Ref("id".into(), Some("someTemp".into()));
-    let non_ref = Tag::new(Token::Id("id".into()), Some(Token::Ref("someTemp".into(), None)));
+    let non_ref = Tag::new_from_token(Token::Id("id".into()), Token::Ref("someTemp".into(), None));
     // hisStart:2012-10-01T00:00:00-04:00 New_York 
     let dt_start = Utc.ymd(1980, 1, 1).and_hms_milli(0, 0, 1, 444);
     let dt_start_fixed_offset: DateTime<FixedOffset> = DateTime::<FixedOffset>::from(dt_start);
-    let his_start = Tag::new(Token::Id("hisStart".into()), Some(Token::DateTime(dt_start_fixed_offset)));
+    let his_start = Tag::new_from_token(Token::Id("hisStart".into()), Token::DateTime(dt_start_fixed_offset));
 
     let dt_end = Utc.ymd(2003, 1, 1).and_hms_milli(0, 0, 1, 444);
     let dt_end_fixed_offset: DateTime<FixedOffset> = DateTime::<FixedOffset>::from(dt_end);
-    let his_end = Tag::new(Token::Id("hisEnd".into()), Some(Token::DateTime(dt_end_fixed_offset)));
+    let his_end = Tag::new_from_token(Token::Id("hisEnd".into()),Token::DateTime(dt_end_fixed_offset));
 
     let grid_metadata = GridMeta::new(Token::Ver("3.0".into()), Some(Tags::new(&vec![non_ref, his_start, his_end])));
     //let grid_metadata = GridMeta::new(Token::Ver("3.0".into()), Some(Tags::new(vec![Tag::new(Token::Id("id".into()), Some(non_ref)])));

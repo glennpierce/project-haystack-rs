@@ -455,12 +455,6 @@ fn ver<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     )(i)
 }
 
-fn zinc_marker_tag<'a>(
-    i: &'a str,
-) -> IResult<&'a str, (Token, Option<Token>), (&'a str, ErrorKind)> {
-    map(zinc_id, |t: Token| (t, None))(i)
-}
-
 fn token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     alt((
         zinc_ref,
@@ -483,20 +477,24 @@ fn scalar<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     })(i)
 }
 
-// "id:@hisId"
-fn zinc_tag_pair<'a>(i: &'a str) -> IResult<&'a str, (Token, Option<Token>), (&'a str, ErrorKind)> {
-    map(
-        separated_pair(zinc_id, char(':'), token),
-        |t: (Token, Token)| (t.0, Some(t.1)),
-    )(i)
+fn zinc_marker_tag<'a>(
+    i: &'a str,
+) -> IResult<&'a str, (Token, Option<Val>), (&'a str, ErrorKind)> {
+    map(zinc_id, |t: Token| (t, None))(i)
 }
 
-// Tag(Box<Token>, Box<Option<Token>>)
+// "id:@hisId"
+fn zinc_tag_pair<'a>(i: &'a str) -> IResult<&'a str, (Token, Option<Val>), (&'a str, ErrorKind)> {
+    map(
+        separated_pair(zinc_id, char(':'), val),
+        |t: (Token, Val)| (t.0, Some(t.1)),
+    )(i)
+}
 
 fn zinc_tag<'a>(i: &'a str) -> IResult<&'a str, Tag, (&'a str, ErrorKind)> {
     map(
         alt((zinc_tag_pair, zinc_marker_tag)),
-        |t: (Token, Option<Token>)| {
+        |t: (Token, Option<Val>)| {
             //Token::Tag(Box::new(t.0), Box::new(t.1))
             Tag::new(t.0, t.1)
         },
@@ -510,6 +508,7 @@ fn tags<'a>(i: &'a str) -> IResult<&'a str, Tags, (&'a str, ErrorKind)> {
         Tags::new(&t)
     })(i)
 }
+
 
 // fn scalar<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
 //     alt((zinc_ref, quoted_string, uri, datetime, date, zinc_number, bool, na, null, marker, remove))(i)
@@ -838,6 +837,18 @@ mod tests {
             list("[6,NA,M,F]"),
             r#"Ok(("", List([Number(6.0, ""), NA, Marker, Bool(false)])))"#
         );
+    }
+
+    #[test]
+    fn tags_test() {
+        use super::*;
+        
+        println!("tags {:?}", tags(r#"projName:"test" id:@hisId"#));
+        println!("tags {:?}", tags(r#"dis:"Dict!" foo"#));
+        println!("tags {:?}", tags(r#"dis:"ict" foo:7"#));
+        println!("tags {:?}", tags(r#"ids:@hisId"#));
+        println!("tags {:?}", tags(r#"ids:[9,8,9,3]"#));
+        println!("tags {:?}", tags(r#"ids:[@hisId1,@hisId2,@hisId3]"#));
     }
 
     #[test]
@@ -1274,17 +1285,17 @@ mod tests {
         let now: DateTime<FixedOffset> = DateTime::<FixedOffset>::from(Utc::now());
 
         let d = Dict::new(&vec![
-            Tag::new(
+            Tag::new_from_token(
                 Token::EscapedString("haystackVersion".into()),
-                Some(Token::EscapedString("3.0".into())),
+                Token::EscapedString("3.0".into()),
             ),
-            Tag::new(
+            Tag::new_from_token(
                 Token::EscapedString("serverTime".into()),
-                Some(Token::DateTime(now)),
+                Token::DateTime(now),
             ),
-            Tag::new(
+            Tag::new_from_token(
                 Token::EscapedString("tz".into()),
-                Some(Token::EscapedString("UTC".into())),
+                Token::EscapedString("UTC".into()),
             ),
         ]);
 
