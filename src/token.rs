@@ -230,6 +230,12 @@ impl Val {
         where T: HVal {
         self.hval.downcast_ref::<T>()
     }
+
+    pub fn cast_to_type<T>(&self) -> Option<T>
+        where T: HVal + Clone {
+        let t: &T = self.hval.downcast_ref::<T>()?;
+        Some(t.clone())
+    }
 }
 
 impl Clone for Val {
@@ -345,6 +351,29 @@ impl Tag {
             value: Some(Val::new(value.clone_dyn())),
         }
     }
+
+    pub fn get_id(&self) -> String {
+    
+        let ident = match &self.ident {
+            Token::Id(id) => id.to_string(),
+            _ => {
+                assert!(true);
+                "".to_string()
+            }
+        };
+
+        ident
+    }
+
+    pub fn get_value<T>(&self) -> Option<T>
+        where T: HVal + Clone {
+        
+        if self.value.is_none() {
+            return None;
+        }
+
+        self.value.clone().unwrap().cast_to_type()
+    }
 }
 
 impl PartialEq for Tag {
@@ -417,11 +446,15 @@ impl Tags {
         }
     }
 
-    // pub fn new_from_tokens(tokens: &Vec<(Token, Option<Token>)>) -> Self {
-    //     Tags {
-    //         tags: tokens.into_iter().map(|x| Tag::new(&x.0, x.1.clone())).collect(),
-    //     }
-    // }
+    pub fn get(&self, id: &str) -> Option<&Tag> {
+        for t in self.tags.iter() {
+            if t.get_id() == id {
+                return Some(t)
+            }
+        }
+
+        None
+    }
 }
 
 impl fmt::Debug for Tags {
