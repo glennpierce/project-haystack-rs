@@ -2,6 +2,7 @@ use chrono::{DateTime, NaiveDate, FixedOffset, Utc};
 
 use std::fmt;
 use std::f64;
+use std::str::FromStr;
 
 use std::collections::BTreeMap;
 
@@ -216,6 +217,11 @@ impl Val {
         Val {
             hval: t,
         }
+    }
+
+    pub fn new_from_token(t: Token) -> Self {
+
+        Val::new(Box::new(t))
     }
 
     pub fn child_type_name(&self) -> String {
@@ -759,6 +765,10 @@ impl Cols {
             cols: cols.clone(),
         }
     }
+
+    pub fn push(&mut self, col: Col) {
+        self.cols.push(col);
+    }
 }
 
 impl fmt::Debug for Cols {
@@ -815,6 +825,14 @@ impl Row {
         Row {
             cells: cells,
         }
+    }
+
+    pub fn push(&mut self, val: Val) {
+        self.cells.push(val);
+    }
+
+    pub fn append(&mut self, other: &mut Vec<Val>) {
+        self.cells.append(other);
     }
 
     pub fn len(&self) -> usize {
@@ -891,6 +909,10 @@ impl Rows {
         }
     }
 
+    pub fn push(&mut self, row: Row) {
+        self.rows.push(row);
+    }
+
     pub fn len(&self) -> usize {
         self.rows.len()
     }
@@ -965,6 +987,38 @@ impl GridMeta {
             version: version.clone(),
             metadata: metadata.clone(),
         }
+    }
+
+    // This function assumes the metadata tag to_string() representation can be converted to T
+    pub fn get_value<T>(&self, id: &str, default: T) -> T
+        where T: FromStr,
+              <T as std::str::FromStr>::Err: std::fmt::Debug {
+        
+        if self.metadata.is_none() {
+            return default;
+        }
+
+        let meta = self.metadata.as_ref().unwrap();
+
+        let option_tag: Option<&Tag> = meta.get(id);
+
+        if option_tag.is_none() {
+            return default;
+        }
+
+        let tag = option_tag.unwrap();
+
+        let s = tag.get_value::<Token>().unwrap().to_string();
+
+        debug!("str: {:?}", s);
+
+        let result = s.parse::<T>();
+
+        if result.is_err() {
+            return default;
+        }
+
+        result.unwrap()
     }
 }
 
