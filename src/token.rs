@@ -8,8 +8,6 @@ use std::collections::BTreeMap;
 
 use std::ops::Index;
 
-use downcast_rs;
-
 use crate::hval::{HVal};
 
 /// An error reported by the parser.

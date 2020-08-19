@@ -6,10 +6,10 @@ use std::str;
 use std::fmt;
 
 use warp;
-use warp::{http::StatusCode, Filter, Buf, http::Response, Reply, Rejection, reject};
+use warp::{http::StatusCode, Filter, http::Response, Rejection, reject};
 use std::convert::Infallible;
 
-use chrono::{DateTime, Local, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
 use std::time::Duration;
 

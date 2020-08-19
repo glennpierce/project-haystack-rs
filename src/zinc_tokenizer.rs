@@ -1,9 +1,8 @@
 //! Tokenizer that converts a zinc string form into a series of `Token`s.
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, tag, take_while1},
+    bytes::complete::{is_a, tag},
     character::complete::{alphanumeric1, char, digit1, multispace0, multispace1, newline, one_of, space0},
-    character::is_digit,
     combinator::{complete, map, opt, peek, recognize},
     error::ErrorKind,
     multi::{many1, separated_list},
@@ -35,9 +34,9 @@ where
     delimited(multispace0, f, multispace0)
 }
 
-fn comma<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
-    map(tag(","), |_: &str| Token::Comma)(i)
-}
+// fn comma<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+//     map(tag(","), |_: &str| Token::Comma)(i)
+// }
 
 fn comma_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     map(tag(","), |_: &str| {
@@ -135,13 +134,13 @@ fn negpos_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     })(i)
 }
 
-fn negpos_i32<'a>(i: &'a str) -> IResult<&'a str, i32, (&'a str, ErrorKind)> {
-    map(alt((tag("+"), tag("-"))), |s: &str| match s {
-        "-" => -1i32,
-        "+" => 1i32,
-        _ => 1,
-    })(i)
-}
+// fn negpos_i32<'a>(i: &'a str) -> IResult<&'a str, i32, (&'a str, ErrorKind)> {
+//     map(alt((tag("+"), tag("-"))), |s: &str| match s {
+//         "-" => -1i32,
+//         "+" => 1i32,
+//         _ => 1,
+//     })(i)
+// }
 
 // 2011-06-07
 // YYYY-MM-DD
@@ -369,25 +368,25 @@ fn zinc_id<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(complete(ident), |s: &str| Token::Id(s.into()))(i)
 }
 
-fn is_char_digit(chr: char) -> bool {
-    return chr.is_ascii() && is_digit(chr as u8);
-}
+// fn is_char_digit(chr: char) -> bool {
+//     return chr.is_ascii() && is_digit(chr as u8);
+// }
 
-fn digits<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
-    take_while1(is_char_digit)(i)
-}
+// fn digits<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+//     take_while1(is_char_digit)(i)
+// }
 
 // Number: 1, -34, 5.4, -5.4, 9.23, 74.2, 4,
-fn simple_number_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
-    map(
-        recognize(tuple((
-            opt(alt((char('-'), char('+')))),
-            many1(digit1),
-            opt(preceded(char('.'), many1(digit1))),
-        ))),
-        |s: &str| s,
-    )(i)
-}
+// fn simple_number_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+//     map(
+//         recognize(tuple((
+//             opt(alt((char('-'), char('+')))),
+//             many1(digit1),
+//             opt(preceded(char('.'), many1(digit1))),
+//         ))),
+//         |s: &str| s,
+//     )(i)
+// }
 
 // Number: 1, -34, 5.4, -5.4, 9.23, 74.2, 4,
 fn simple_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
