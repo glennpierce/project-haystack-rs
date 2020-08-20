@@ -781,6 +781,13 @@ impl fmt::Display for Cols {
     }
 }
 
+impl Index<usize> for Cols {
+    type Output = Col;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.cols[index]
+    }
+}
 
 impl HVal for Cols {
 
@@ -921,6 +928,37 @@ impl Index<usize> for Rows {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.rows[index]
+    }
+}
+
+impl IntoIterator for Rows {
+    type Item = Row;
+    type IntoIter = RowsIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        RowsIterator {
+            rows: self,
+            index: 0,
+        }
+    }
+}
+
+pub struct RowsIterator {
+    rows: Rows,
+    index: usize,
+}
+
+impl Iterator for RowsIterator {
+    type Item = Row;
+    fn next(&mut self) -> Option<Row> {
+
+        if self.index == self.rows.len() {
+            return None
+        }
+
+        let result = self.rows[self.index].clone();
+        self.index += 1;
+        Some(result)
     }
 }
 
