@@ -231,7 +231,7 @@ fn timezone_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)>
 // YYYY-MM-DD'T'hh:mm:ss.FFFFFFFFFz zzzz
 fn datetime_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     map(
-        recognize(tuple((date, char('T'), time_with_subseconds, timezone_s))),
+        recognize(tuple((date, char('T'), alt((time_with_subseconds, time_s)), timezone_s))),
         |s: &str| s,
     )(i)
 }
@@ -279,6 +279,16 @@ fn datetime_range<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, 
 fn utc_date_floor(dt: Date<Utc>) -> DateTime::<FixedOffset> {
     let midnight = dt.and_hms(0,0,0);
     DateTime::<FixedOffset>::from(midnight)
+}
+
+fn range_lastfiveminutes<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("lastfiveminutes"), |_: &str| {
+        (
+            Token::DateTime(DateTime::<FixedOffset>::from(Utc::now() - chrono::Duration::minutes(5))),
+            Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+        )
+        }
+    )(i)
 }
 
 fn range_today<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
@@ -334,9 +344,10 @@ pub fn date_range_to_token<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (
         range_thisweek,
         range_thismonth,
         range_thisyear,
+        range_lastfiveminutes,
         datetime_range,
-        date_range,
         map(datetime_s, |s: &str| (str_to_datetime_token(s), Token::DateTime(DateTime::<FixedOffset>::from(Utc::now())))),
+        date_range,
         map(date_s, |s: &str| {
             
             (
@@ -698,6 +709,39 @@ mod tests {
         let comma = Val::new(Box::new(Token::Comma));
 
         assert_eq!(comma.to_string(), ",".to_string());
+    }
+
+    #[test]
+    fn date_range_to_token_test() {
+        use super::*;
+
+        let t = DateTime::<FixedOffset>::from(Utc::now());
+
+        //assert_eq!(date_today("today"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_yesterday("yesterday"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_thisweek("thisweek"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(date_thismonth("thismonth"), Ok(("", Token::DateTime(t))));
+        //assert_eq!(range_thisyear("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+        
+       // assert_eq!(date_range_to_token("thisweek"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("yesterday"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("thisyear"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-02,2020-08-06"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11T15:35:24.677428186+00:00,2020-08-12T12:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11T15:35:24.677428186+00:00"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+       // assert_eq!(date_range_to_token("2020-08-11"), Ok(("", (Token::DateTime(t), Token::DateTime(t)))));
+
+       //println!("{:?}", date_range_to_token("2020-08-11"));
+       
+       println!("{:?}", date_range_to_token("lastfiveminutes"));
+       println!("{:?}", date_range_to_token("yesterday"));
+       println!("{:?}", time_s("11:30:00"));
+       println!("{:?}", time_with_subseconds("11:30:00.677428186"));
+       println!("{:?}", datetime_s("2020-09-02T11:30:00+00:00"));
+       println!("{:?}", datetime_range("2020-09-02T11:30:00+00:00,2020-09-02T12:30:00+00:00"));
+       println!("{:?}", date_range_to_token("2020-09-02T11:30:00+00:00"));
+
+
     }
 
     #[test]
@@ -1246,10 +1290,6 @@ mod tests {
             zinc_number("-5.4e-45Kg"),
             Ok(("", Token::Number(-5.4e-45f64, "Kg".into())))
         );
-
-        assert_eq!(comma(","), Ok(("", Token::Comma)));
-
-        assert_eq!(comma(","), Ok(("", Token::Comma)));
 
         assert_eq!(null("N"), Ok(("", Token::Null)));
 
