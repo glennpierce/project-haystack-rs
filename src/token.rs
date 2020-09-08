@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, FixedOffset, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, FixedOffset, Utc};
 
 use std::fmt;
 use std::f64;
@@ -93,7 +93,7 @@ pub enum Token {
 
     Date(NaiveDate),
 
-    //Time(String),
+    Time(NaiveTime),
 
     DateTime(DateTime<FixedOffset>),
 
@@ -135,6 +135,7 @@ impl fmt::Display for Token {
             Token::EscapedString(val) => write!(f, "{}", val),
         
             Token::Date(val) => write!(f, "{}", val.format("%Y-%m-%d")),
+            Token::Time(val) => write!(f, "{}", val.format("%H:%M:%S")),
 
             Token::DateTime(val) => {
                 let utc: DateTime<Utc> = val.with_timezone(&Utc);
@@ -184,6 +185,8 @@ impl HVal for Token {
             Token::EscapedString(val) => format!("\"{}\"", val.escape_debug()),
         
             Token::Date(val) => format!("{}", val.format("%Y-%m-%d")),
+
+            Token::Time(val) => format!("{}", val.format("%H:%M:%S")),
 
             Token::DateTime(val) => {
 

@@ -9,7 +9,7 @@ use nom::{
     sequence::{delimited, preceded, separated_pair, terminated, tuple}, IResult,
 };
 
-use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveTime, NaiveDateTime, TimeZone, Utc};
 
 use crate::hval::HVal;
 use crate::token::*;
@@ -111,7 +111,7 @@ fn quoted_string_s<'a>(i: &'a str) -> IResult<&'a str, String, (&'a str, ErrorKi
     terminated(qs, tag("\""))(i)
 }
 
-fn quoted_string<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn quoted_string<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(quoted_string_s, |s: String| {
         Token::EscapedString(s.to_string())
     })(i)
@@ -121,7 +121,7 @@ fn unicode_alpha0(i: &str) -> nom::IResult<&str, &str> {
     nom_unicode::complete::alpha0(i)
 }
 
-fn uri<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn uri<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     let qs = preceded(tag("`"), unicode_alpha0);
     map(terminated(qs, tag("`")), |s: &str| {
         Token::Uri(s.to_string())
@@ -144,11 +144,11 @@ fn negpos_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
 
 // 2011-06-07
 // YYYY-MM-DD
-fn date_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+pub fn date_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((digit1, char('-'), digit1, char('-'), digit1)))(i)
 }
 
-fn date<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn date<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(date_s, |s: &str| {
         Token::Date(dtparse::parse(s).unwrap().0.date())
     })(i)
@@ -191,9 +191,16 @@ fn time_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
 }
 
 // hh:mm:ss.FFFFFFFFF
-fn time_with_subseconds<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+fn time_with_subseconds_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((time_s, opt(tuple((char('.'), digit1))))))(i)
 }
+
+pub fn time_with_subseconds<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+    map(time_with_subseconds_s, |s: &str| {
+        Token::Time(NaiveTime::parse_from_str(s, "%H:%M:%S%.f").expect("Failed to parse"))
+    })(i)
+}
+
 
 // 2012-09-29T14:56:18.277Z UTC
 // 2012-09-29T14:56:18.277Z
@@ -231,7 +238,7 @@ fn timezone_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)>
 // YYYY-MM-DD'T'hh:mm:ss.FFFFFFFFFz zzzz
 fn datetime_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     map(
-        recognize(tuple((date, char('T'), alt((time_with_subseconds, time_s)), timezone_s))),
+        recognize(tuple((date, char('T'), alt((time_with_subseconds_s, time_s)), timezone_s))),
         |s: &str| s,
     )(i)
 }
@@ -359,7 +366,7 @@ pub fn date_range_to_token<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (
     ))(i)
 }
 
-fn ident<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+pub fn ident<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     let remaining_chars: &str = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let first_chars: &str = "abcdefghijklmnopqrstuvwxyz";
     // Returns whole strings matched by the given parser.
@@ -375,7 +382,7 @@ fn ident<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     )(i)
 }
 
-fn zinc_id<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn zinc_id<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(complete(ident), |s: &str| Token::Id(s.into()))(i)
 }
 
@@ -426,7 +433,7 @@ fn units<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     alphanumeric1(i)
 }
 
-fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tuple((number, opt(units))), |t: (f64, Option<&str>)| {
         Token::Number(t.0, t.1.unwrap_or(&"".to_string()).into())
     })(i)
@@ -447,7 +454,7 @@ fn ref_char<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
 }
 
 // println!("{:?}", zinc_ref(r#"@hisId"#));
-fn zinc_ref<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn zinc_ref<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(
         tuple((
             tag("@"),
@@ -736,7 +743,7 @@ mod tests {
        println!("{:?}", date_range_to_token("lastfiveminutes"));
        println!("{:?}", date_range_to_token("yesterday"));
        println!("{:?}", time_s("11:30:00"));
-       println!("{:?}", time_with_subseconds("11:30:00.677428186"));
+       println!("{:?}", time_with_subseconds_s("11:30:00.677428186"));
        println!("{:?}", datetime_s("2020-09-02T11:30:00+00:00"));
        println!("{:?}", datetime_range("2020-09-02T11:30:00+00:00,2020-09-02T12:30:00+00:00"));
        println!("{:?}", date_range_to_token("2020-09-02T11:30:00+00:00"));
@@ -804,7 +811,7 @@ mod tests {
 
         assert_eq!(time_s("23:33:07"), Ok(("", "23:33:07")));
         assert_eq!(
-            time_with_subseconds("23:33:07.087642"),
+            time_with_subseconds_s("23:33:07.087642"),
             Ok(("", "23:33:07.087642"))
         );
         assert_eq!(timezone_s("Z UTC"), Ok(("", "Z UTC")));

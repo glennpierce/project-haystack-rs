@@ -28,7 +28,7 @@ pub mod token;
 pub mod hval;
 pub mod zinc_tokenizer;
 pub mod server;
-
+pub mod filter_tokenizer;
 
 #[cfg(test)]
 mod tests {

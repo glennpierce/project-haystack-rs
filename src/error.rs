@@ -12,6 +12,54 @@ use std::num;
 //     }}
 // }
 
+
+/// An error reported by the parser.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilterTokenParseError {
+    /// A token that is not allowed at the given location (contains the location of the offending
+    /// character in the source string).
+    UnexpectedToken(usize),
+
+    UnexpectedStrToken(String),
+    /// Missing right parentheses at the end of the source string (contains the number of missing
+    /// parens).
+    MissingRParen(i32),
+    /// Missing operator or function argument at the end of the expression.
+    MissingArgument,
+
+    UnknownError
+}
+
+impl fmt::Display for FilterTokenParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &*self {
+            FilterTokenParseError::UnexpectedToken(i) => write!(f, "Unexpected token at byte {}.", i),
+            FilterTokenParseError::UnexpectedStrToken(s) => write!(f, "Unexpected token {}.", s),
+            FilterTokenParseError::MissingRParen(i) => write!(
+                f,
+                "Missing {} right parenthes{}.",
+                i,
+                if *i == 1 { "is" } else { "es" }
+            ),
+            FilterTokenParseError::MissingArgument => write!(f, "Missing argument at the end of expression."),
+            FilterTokenParseError::UnknownError => write!(f, "Unknown pass error."),
+        }
+    }
+}
+
+impl std::error::Error for FilterTokenParseError {
+    fn description(&self) -> &str {
+        match *self {
+            FilterTokenParseError::UnexpectedToken(_) => "unexpected token",
+            FilterTokenParseError::UnexpectedStrToken(_) => "Unexpected token",
+            FilterTokenParseError::MissingRParen(_) => "missing right parenthesis",
+            FilterTokenParseError::MissingArgument => "missing argument",
+            FilterTokenParseError::UnknownError => "unknown error",
+        }
+    }
+}
+
+
 // We derive `Debug` because all types should probably derive `Debug`.
 // This gives us a reasonable human readable description of `CliError` values.
 #[derive(Debug)]
