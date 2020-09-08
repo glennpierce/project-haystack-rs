@@ -45,6 +45,10 @@ fn name<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     )(i)
 }
 
+fn not<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    map(tag("not"), |_: &str| FilterToken::Unary(Operation::Not))(i)
+}
+
 /// Expression tokens.
 #[derive(Debug, PartialEq, Clone)]
 pub enum FilterToken {
@@ -162,14 +166,14 @@ fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorK
 
     delimited(
           multispace0,
-          alt((binop, rparen)),
+          alt((not, binop, rparen)),
           multispace0
     )(i)
 }
 
 fn after_rexpr_no_paren<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    delimited(multispace0, binop, multispace0)(i)
+    delimited(multispace0, alt((not, binop)), multispace0)(i)
 }
 
 #[derive(Debug, Clone, Copy)]

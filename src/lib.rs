@@ -29,6 +29,7 @@ pub mod hval;
 pub mod zinc_tokenizer;
 pub mod server;
 pub mod filter_tokenizer;
+pub mod filter_shunting_yard;
 
 #[cfg(test)]
 mod tests {
