@@ -189,6 +189,14 @@ mod tests {
         assert_eq!(to_rpn(&[FilterToken::Name("elec".to_string()), Binary(Operation::And), FilterToken::Name("heat".to_string())]),
             Ok(vec![FilterToken::Name("elec".to_string()), FilterToken::Name("heat".to_string()), Binary(Operation::And)]));
 
+        // equip and siteRef->geoCity == "Chicago"
+        // The way to read the above expression is match an entity if:
+
+        // it has equip tag
+        // and it has a siteRef tag which is a Ref
+        // and what the siteRef tag points to has the geoCity tag
+        // and that the site's geoCity tag is equal to "Chicago"
+
         assert_eq!(to_rpn(&tokenize("equip and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
             Ok(vec![FilterToken::Name("equip".to_string()), FilterToken::Name("siteRef".to_string()),
                     FilterToken::Name("geoCity".to_string()), Binary(Operation::Has),
