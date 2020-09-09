@@ -421,6 +421,18 @@ mod tests {
             FilterToken::Val(Token::EscapedString("Chicago".to_string())),
         ]));
 
+        assert_eq!(tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"), Ok(vec![
+            FilterToken::Name("equip".to_string()),
+            Binary(And),
+            FilterToken::Val(Token::EscapedString("Chicago".to_string())),
+            Binary(Equals),
+            FilterToken::Name("siteRef".to_string()),
+            Binary(Has),
+            FilterToken::Name("geoCity".to_string()),
+            Binary(Has),
+            FilterToken::Name("dis".to_string()),
+        ]));
+
         // assert_eq!(tokenize("a"), Ok(vec![Var("a".into())]));
 
         // assert_eq!(

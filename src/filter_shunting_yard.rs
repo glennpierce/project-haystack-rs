@@ -8,6 +8,8 @@
 //! [shunting]: https://en.wikipedia.org/wiki/Shunting-yard_algorithm
 use std;
 use std::fmt;
+
+use crate::error::*;
 use crate::token::Token;
 use crate::filter_tokenizer::{FilterToken, Operation, tokenize};
 
@@ -18,50 +20,6 @@ enum Associativity {
     NA,
 }
 
-/// An error produced by the shunting-yard algorightm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RPNError {
-    /// An extra left parenthesis was found.
-    MismatchedLParen(usize),
-    /// An extra right parenthesis was found.
-    MismatchedRParen(usize),
-    /// Comma that is not separating function arguments.
-    UnexpectedComma(usize),
-    /// Too few operands for some operator.
-    NotEnoughOperands(usize),
-    /// Too many operands reported.
-    TooManyOperands,
-}
-
-impl fmt::Display for RPNError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            RPNError::MismatchedLParen(i) => {
-                write!(f, "Mismatched left parenthesis at token {}.", i)
-            }
-            RPNError::MismatchedRParen(i) => {
-                write!(f, "Mismatched right parenthesis at token {}.", i)
-            }
-            RPNError::UnexpectedComma(i) => write!(f, "Unexpected comma at token {}", i),
-            RPNError::NotEnoughOperands(i) => write!(f, "Missing operands at token {}", i),
-            RPNError::TooManyOperands => {
-                write!(f, "Too many operands left at the end of expression.")
-            }
-        }
-    }
-}
-
-impl std::error::Error for RPNError {
-    fn description(&self) -> &str {
-        match *self {
-            RPNError::MismatchedLParen(_) => "mismatched left parenthesis",
-            RPNError::MismatchedRParen(_) => "mismatched right parenthesis",
-            RPNError::UnexpectedComma(_) => "unexpected comma",
-            RPNError::NotEnoughOperands(_) => "missing operands",
-            RPNError::TooManyOperands => "too many operands left at the end of expression",
-        }
-    }
-}
 
 /// Returns the operator precedence and associativity for a given token.
 fn prec_assoc(token: &FilterToken) -> (u32, Associativity) {

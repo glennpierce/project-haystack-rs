@@ -13,6 +13,125 @@ use std::num;
 // }
 
 
+
+/// An error produced by the shunting-yard algorightm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RPNError {
+    /// An extra left parenthesis was found.
+    MismatchedLParen(usize),
+    /// An extra right parenthesis was found.
+    MismatchedRParen(usize),
+    /// Comma that is not separating function arguments.
+    UnexpectedComma(usize),
+    /// Too few operands for some operator.
+    NotEnoughOperands(usize),
+    /// Too many operands reported.
+    TooManyOperands,
+}
+
+impl fmt::Display for RPNError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            RPNError::MismatchedLParen(i) => {
+                write!(f, "Mismatched left parenthesis at token {}.", i)
+            }
+            RPNError::MismatchedRParen(i) => {
+                write!(f, "Mismatched right parenthesis at token {}.", i)
+            }
+            RPNError::UnexpectedComma(i) => write!(f, "Unexpected comma at token {}", i),
+            RPNError::NotEnoughOperands(i) => write!(f, "Missing operands at token {}", i),
+            RPNError::TooManyOperands => {
+                write!(f, "Too many operands left at the end of expression.")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RPNError {
+    fn description(&self) -> &str {
+        match *self {
+            RPNError::MismatchedLParen(_) => "mismatched left parenthesis",
+            RPNError::MismatchedRParen(_) => "mismatched right parenthesis",
+            RPNError::UnexpectedComma(_) => "unexpected comma",
+            RPNError::NotEnoughOperands(_) => "missing operands",
+            RPNError::TooManyOperands => "too many operands left at the end of expression",
+        }
+    }
+}
+
+
+/// An error produced during parsing or evaluation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilterError {
+    UnknownVariable(String),
+    UnknownAlias(String),
+
+    /// An error returned by the parser.
+    ParseError(FilterTokenParseError),
+    /// The shunting-yard algorithm returned an error.
+    RPNError(RPNError),
+    // A catch all for all other errors during evaluation
+    EvalError(String),
+}
+
+impl fmt::Display for FilterError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            FilterError::UnknownVariable(ref name) => {
+                write!(f, "Evaluation error: unknown variable `{}`.", name)
+            }
+            FilterError::UnknownAlias(ref name) => {
+                write!(f, "Evaluation error: unknown alias `{}`.", name)
+            }
+            FilterError::ParseError(ref e) => {
+                write!(f, "Parse error: ")?;
+                e.fmt(f)
+            }
+            FilterError::RPNError(ref e) => {
+                write!(f, "RPN error: ")?;
+                e.fmt(f)
+            }
+            FilterError::EvalError(ref e) => {
+                write!(f, "Eval error: ")?;
+                e.fmt(f)
+            }
+        }
+    }
+}
+
+impl From<FilterTokenParseError> for FilterError {
+    fn from(err: FilterTokenParseError) -> FilterError {
+        FilterError::ParseError(err)
+    }
+}
+
+impl From<RPNError> for FilterError {
+    fn from(err: RPNError) -> FilterError {
+        FilterError::RPNError(err)
+    }
+}
+
+impl std::error::Error for FilterError {
+    fn description(&self) -> &str {
+        match *self {
+            FilterError::UnknownVariable(_) => "unknown variable",
+            FilterError::UnknownAlias(_) => "unknown alias",
+            FilterError::EvalError(_) => "eval error",
+            FilterError::ParseError(ref e) => e.description(),
+            FilterError::RPNError(ref e) => e.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        match *self {
+            FilterError::ParseError(ref e) => Some(e),
+            FilterError::RPNError(ref e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+
 /// An error reported by the parser.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterTokenParseError {
