@@ -10,6 +10,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "array_tool"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f8cb5d814eb646a863c4f24978cff2880c4be96ad8cde2c0f0678732902e271"
+
+[[package]]
 name = "arrayvec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1002,6 +1008,7 @@ dependencies = [
 name = "project-haystack-rs"
 version = "0.1.0"
 dependencies = [
+ "array_tool",
  "bytes",
  "chrono",
  "data-encoding",

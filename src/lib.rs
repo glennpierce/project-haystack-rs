@@ -23,6 +23,8 @@ extern crate ring;
 
 extern crate escape8259;
 
+extern crate array_tool;
+
 pub mod error;
 pub mod token;
 pub mod hval;

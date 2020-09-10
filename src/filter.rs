@@ -18,6 +18,8 @@ use crate::*;
 use crate::error::*;
 use crate::token::Token;
 
+use array_tool::vec::Intersect;
+
 type ContextHashMap<K, V> = HashMap<K, V>;
 
 /// Representation of a parsed expression.
@@ -43,25 +45,45 @@ pub struct Filter {
     rpn: Vec<FilterToken>,
 }
 
+pub type TagPair = (String, String);
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackValue {
     Token(Token),
-    Name(String, Vec<(String, String)>)
+    Name((String, Vec<TagPair>))
 }
 
 impl fmt::Display for StackValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             StackValue::Token(v) => write!(f, "{}", v),
-            StackValue::Name(n, v) => write!(f, "{:?}: {:?}", n, v)
+            StackValue::Name(v) => write!(f, "{:?}", v)
             }
     }
 }
 
-pub fn eval_str<F>(expr: &str, f: F) -> Result<StackValue, FilterError> 
-where F: Fn(&str) -> (String, Vec<(String, String)>) {
-
+pub fn eval_str(expr: &str, f: &dyn Fn() -> Vec<(String, Vec<TagPair>)>) -> Result<StackValue, FilterError> 
+{
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
+
+    // store is haystack_tag_id -> (haystack_tag_value, id)
+    let mut store: HashMap<String, Vec<TagPair>> = HashMap::new();
+
+    let values = f();
+
+    for (id, haystack_tags) in values {
+        for (haystack_tag, haystack_tag_value) in haystack_tags {
+
+            match store.get_mut(&haystack_tag) {
+                Some(vec_values) => {
+                    vec_values.push((haystack_tag_value, id.clone()));
+                },
+                None => {
+                    store.insert(haystack_tag, vec![(haystack_tag_value, id.clone())]);
+                }
+            }
+        }
+    }
 
     let tokens = tokenize(expr)?;
     let rpn = to_rpn(&tokens)?;
@@ -75,17 +97,54 @@ where F: Fn(&str) -> (String, Vec<(String, String)>) {
             FilterToken::Bool(f) => {
                 stack.push(StackValue::Token(Token::Bool(f)));
             },
-            // FilterToken::Name(ref n) => {
-            //     if let Some(v) = ctx.get_aliases_values(*n) {
-            //         stack.push(StackValue::Values(v));
-            //     } else {
-            //         return Err(FilterError::UnknownVariable(n.to_string()));
-            //     }
-            // },
+            FilterToken::Name(ref n) => {   // Name here is a tag. We need to get all the refs with that tag
+
+               stack.push(StackValue::Name((n.clone(), store.get(n).unwrap_or(&vec![]).clone()) ));
+            },
             FilterToken::Binary(op) => {
                 let right_stack_value: StackValue = stack.pop().unwrap();
                 let left_stack_value: StackValue = stack.pop().unwrap();
                 
+                match (left_stack_value, right_stack_value) {
+
+                    (StackValue::Name(left), StackValue::Name(right)) => {
+                        let r = match op {
+                            And => {
+
+                                // We only return where the haystack tag names match
+                                //left.iter().map(|l| l.1[])
+                                let left_tags: &Vec<TagPair> = &left.1;
+                                let right_tags: &Vec<TagPair> = &right.1;
+
+                                let left_names: Vec<String> = left_tags.iter().map(|i| i.0.clone()).collect();
+                                let right_names: Vec<String> = right_tags.iter().map(|i| i.0.clone()).collect();
+
+                                let insection = left_names.intersect(right_names);
+                                //stack.push(StackValue::Value(r));
+
+                                //let F: Vec<(String, String)> = left.iter().zip(right.iter()).map(|(&l, &r)| b - v).collect();
+
+                               // left.iter()
+                            },
+                            //Or => left - right,
+                            //Has => left * right,
+                            _ => {
+                                return Err(FilterError::EvalError(format!(
+                                    "Unimplemented binary operation: {:?}",
+                                    op
+                                )));
+                            }
+                        };
+
+                       // stack.push(StackValue::Value(r));
+                    },
+
+                    _ => {
+                        return Err(FilterError::EvalError("Unimplemented binary types".to_string()));
+                    }
+       
+                 };
+
                 // match (left_stack_value, right_stack_value) {
 
                     // (StackValue::Value(left), StackValue::Value(right)) => {
@@ -225,6 +284,17 @@ mod tests {
 
     #[test]
     fn test_eval() {
+
+        fn get_tags() -> Vec<(String, Vec<(String, String)>)> {
+            vec![
+                ("@1".to_string(), vec![("dis".to_string(), "One".to_string()), ("elec".to_string(), "elec".to_string())]),
+                ("@2".to_string(), vec![("dis".to_string(), "Two".to_string()), ("elec".to_string(), "elec".to_string())]),
+                ("@3".to_string(), vec![("dis".to_string(), "Three".to_string()), ("heat".to_string(), "heat".to_string())]),
+                ("@4".to_string(), vec![("dis".to_string(), "Four".to_string()), ("water".to_string(), "water".to_string())])
+            ]
+        }
+
+        eval_str("elec and heat", &get_tags);
         // assert_eq!(eval_str("2 + 3"), Ok(StackValue::Value(5.)));
         // assert_eq!(eval_str("2 + (3 + 4)"), Ok(StackValue::Value(9.)));
         // assert_eq!(eval_str("-2 + (4 - 1)"), Ok(StackValue::Value(1.)));
