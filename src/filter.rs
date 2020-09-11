@@ -63,22 +63,27 @@ pub struct Filter {
 
 //pub type Tag = (String, Token);
 // Id, TagName, Value
-pub type RefTag = (String, String, Token);
+pub type RefTag = (Token, String, Token);
 pub type RefTags = Vec<RefTag>;
+
+
+pub type HaystackTag = (String, Token);
+pub type HaystackTags = Vec<HaystackTag>;
 
 // pub type NameWithTags = (String, Vec<(String, String, Token)>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackValue {
     Token(Token),
-    Name(RefTags)
+    //Name(RefTags)
+    Refs(Vec<Token>)
 }
 
 impl fmt::Display for StackValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             StackValue::Token(v) => write!(f, "{}", v),
-            StackValue::Name(v) => write!(f, "{:?}", v)
+            StackValue::Refs(v) => write!(f, "{:?}", v)
             }
     }
 }
@@ -87,20 +92,34 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 {
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
 
-    // store is haystack_tag_id -> (haystack_tag_value, id)
+    // haystack_tag_name_store is haystack_tag_id -> (haystack_tag_value, id)
     // We do this for fater lookup of refs with tag
-    let mut store: HashMap<String, RefTags> = HashMap::new();
+    let mut haystack_tag_name_store: HashMap<String, Vec<Token>> = HashMap::new();
+    let mut haystack_ref_name_store: HashMap<String, HaystackTags> = HashMap::new();
 
     let values = f();
 
-    for (id, haystack_tag_name, haystack_tag_value) in values {
+    for (id, haystack_tag_name, haystack_tag_value) in values.clone() {
         
-        match store.get_mut(&haystack_tag_name) {
+        match haystack_ref_name_store.get_mut(&id.to_string()) {
             Some(vec_values) => {
-                vec_values.push((id.clone(), haystack_tag_name, haystack_tag_value));
+                vec_values.push((haystack_tag_name, haystack_tag_value));
             },
             None => {
-                store.insert(haystack_tag_name.clone(), vec![(id.clone(), haystack_tag_name, haystack_tag_value)]);
+                haystack_ref_name_store.insert(id.to_string(), vec![(haystack_tag_name, haystack_tag_value)]);
+            }
+        }
+        
+    }
+
+    for (id, haystack_tag_name, haystack_tag_value) in values {
+        
+        match haystack_tag_name_store.get_mut(&haystack_tag_name) {
+            Some(vec_values) => {
+                vec_values.push(id.clone());
+            },
+            None => {
+                haystack_tag_name_store.insert(haystack_tag_name.clone(), vec![id.clone()]);
             }
         }
         
@@ -109,12 +128,12 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     // for (id, haystack_tags) in values {
     //     for (haystack_tag, haystack_tag_value) in haystack_tags {
 
-    //         match store.get_mut(&haystack_tag) {
+    //         match haystack_tag_name_store.get_mut(&haystack_tag) {
     //             Some(vec_values) => {
     //                 vec_values.push((haystack_tag_value, id.clone()));
     //             },
     //             None => {
-    //                 store.insert(haystack_tag, vec![(haystack_tag_value, id.clone())]);
+    //                 haystack_tag_name_store.insert(haystack_tag, vec![(haystack_tag_value, id.clone())]);
     //             }
     //         }
     //     }
@@ -138,8 +157,15 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                // NameWithTags = (String, Vec<Tag>);
                // returns  Vec<(Token, String)>
-               // stack.push(StackValue::Name((tag_name.clone(), store.get(tag_name).unwrap_or(&vec![]).clone()) ));
-               stack.push(StackValue::Name(store.get(tag_name).unwrap_or(&vec![]).clone()));
+               // stack.push(StackValue::Name((tag_name.clone(), haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()) ));
+               // stack.push(StackValue::Name(haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()));
+
+               // Return all ids with tag_name
+               //let refs = haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()
+
+               //let filtered: RefTags = right.iter().filter(|x| site_refs.contains(&x.0) ).cloned().collect();
+
+               stack.push(StackValue::Refs(haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()));
             },
             FilterToken::Binary(op) => {
 
@@ -148,11 +174,14 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 let right_stack_value: StackValue = stack.pop().unwrap();
                 let left_stack_value: StackValue = stack.pop().unwrap();
                 
+                // let right_stack_tags: Vec<String> = haystack_ref_name_store.get()
+
                 match (left_stack_value, right_stack_value) {
 
-                    (StackValue::Name(left), StackValue::Name(right)) => {
+                    (StackValue::Refs(left), StackValue::Refs(right)) => {
                         let r = match op {
                             Operation::And => {
+
 
                                 // We only return where the haystack tag names match
                                 //left.iter().map(|l| l.1[])
@@ -162,7 +191,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                                 println!("AND left: {:?}", left);
                                 println!("AND right: {:?}", right);
 
-                                left.intersect_if(right, |l, r| l.0 == r.0)
+                                left.intersect_if(right, |l, r| l == r)
 
                                 // left: [("@1", "elec", EscapedString("elec")), ("@2", "elec", EscapedString("elec"))]
                                 // right: [("@1", "heat", EscapedString("heat")), ("@3", "heat", EscapedString("heat"))]
@@ -186,16 +215,16 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             },
                             Operation::Or => {
 
-                                println!("left: {:?}", left);
-                                println!("right: {:?}", right);
+                                // println!("left: {:?}", left);
+                                // println!("right: {:?}", right);
 
                                 let mut merged = left.clone();
                                 merged.extend(right);
 
-                                println!("merged: {:?}", merged);
+                                //let set: HashSet<_> = merged.drain(..).collect(); // dedup
+                                //vec.extend(set.into_iter());
 
                                 merged
-
 
                             },
                         
@@ -217,23 +246,23 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                                 }
 
                                 // filter right to have only ids match siteRefs in left
-                                let site_refs: Vec<String> = left.iter().flat_map(|x| match_refs(x.2.clone()) ).collect();
-                                let filtered: RefTags = right.iter().filter(|x| site_refs.contains(&x.0) ).cloned().collect();
+                             //   let site_refs: Vec<String> = left.iter().flat_map(|x| match_refs(x.2.clone()) ).collect();
+                            //    let filtered: RefTags = right.iter().filter(|x| site_refs.contains(&x.0) ).cloned().collect();
 
                                 // Must now get all tags for this ref to return
 
 
-                                println!("siteRefs: {:?}", site_refs);
+                             //   println!("siteRefs: {:?}", site_refs);
 
                                 //if left[0].2 == right[0]
 
                                 // let mut merged = left.clone();
                                 // merged.extend(right);
 
-                                println!("filtered: {:?}", filtered);
+                            //    println!("filtered: {:?}", filtered);
 
-                                filtered
-
+                             //   filtered
+                             vec![]
 
                             },
                             _ => {
@@ -244,7 +273,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             }
                         };
 
-                        stack.push(StackValue::Name(r));
+                        stack.push(StackValue::Refs(r));
                     },
 
                     _ => {
@@ -337,27 +366,29 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 let x_stack_value: StackValue = stack.pop().unwrap();
                 match x_stack_value {
 
-                    StackValue::Name(x) => {
+                    StackValue::Refs(x) => {
 
                         let r = match op {
                        
                             Operation::Not => {
 
-                                // The vec after not should all have the same haystack key
-                                // for example below they all have elec
-                                let key = x[0].1.clone();
-                                // x: [("@1", "elec", EscapedString("elec")), ("@3", "elec", EscapedString("elec")), ("@5", "elec", EscapedString("elec"))]
-                                let mut merged: RefTags = vec![];
+                                // // The vec after not should all have the same haystack key
+                                // // for example below they all have elec
+                                // let key = x[0].1.clone();
+                                // // x: [("@1", "elec", EscapedString("elec")), ("@3", "elec", EscapedString("elec")), ("@5", "elec", EscapedString("elec"))]
+                                // let mut merged: RefTags = vec![];
 
-                                for (k, v) in store.iter() {
-                                    if *k != key {
-                                        // RefTags
-                                        merged.extend(v.clone());
-                                    }
-                                }
+                                // for (k, v) in haystack_tag_name_store.iter() {
+                                //     if *k != key {
+                                //         // RefTags
+                                //         merged.extend(v.clone());
+                                //     }
+                                // }
 
-                                // stack.push(StackValue::Name(merged));
-                                merged
+                                // // stack.push(StackValue::Name(merged));
+                                // merged
+
+                                vec![]
                             },
 
                             _ => {
@@ -368,7 +399,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             }
                         };
 
-                        stack.push(StackValue::Name(r));
+                        stack.push(StackValue::Refs(r));
                     },
 
                     _ => {
@@ -441,37 +472,39 @@ mod tests {
         // Maybe inefficient but will do for now.
         fn get_tags() -> RefTags {
             vec![
-                ("@1".to_string(), "dis".to_string(), Token::EscapedString("One".to_string())),
-                ("@1".to_string(), "elec".to_string(), Token::EscapedString("elec".to_string())),
-                ("@1".to_string(), "heat".to_string(), Token::EscapedString("heat".to_string())),
-                ("@1".to_string(), "water".to_string(), Token::EscapedString("water".to_string())),
-                ("@1".to_string(), "geoCity".to_string(), Token::EscapedString("Chicago".to_string())),
+                (Token::Ref("@1".to_string(), None), "dis".to_string(), Token::EscapedString("One".to_string())),
+                (Token::Ref("@1".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),
+                (Token::Ref("@1".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),
+                (Token::Ref("@1".to_string(), None), "water".to_string(), Token::EscapedString("water".to_string())),
+                (Token::Ref("@1".to_string(), None), "geoCity".to_string(), Token::EscapedString("Chicago".to_string())),
 
-                ("@2".to_string(), "dis".to_string(), Token::EscapedString("Two".to_string())),
+                (Token::Ref("@2".to_string(), None), "dis".to_string(), Token::EscapedString("Two".to_string())),
                 
-                ("@3".to_string(), "dis".to_string(), Token::EscapedString("Three".to_string())),
-                ("@3".to_string(), "heat".to_string(), Token::EscapedString("heat".to_string())),   
-                ("@3".to_string(), "elec".to_string(), Token::EscapedString("elec".to_string())),  
-                ("@3".to_string(), "siteRef".to_string(), Token::Ref("1".to_string(), None)),       
+                (Token::Ref("@3".to_string(), None), "dis".to_string(), Token::EscapedString("Three".to_string())),
+                (Token::Ref("@3".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),   
+                (Token::Ref("@3".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),  
+                (Token::Ref("@3".to_string(), None), "siteRef".to_string(), Token::Ref("1".to_string(), None)),       
                 
-                ("@4".to_string(), "dis".to_string(), Token::EscapedString("Four".to_string())),
-                ("@4".to_string(), "heat".to_string(), Token::EscapedString("Four".to_string())),  
-                ("@4".to_string(), "geoCity".to_string(), Token::EscapedString("London".to_string())),
+                (Token::Ref("@4".to_string(), None), "dis".to_string(), Token::EscapedString("Four".to_string())),
+                (Token::Ref("@4".to_string(), None), "heat".to_string(), Token::EscapedString("Four".to_string())),  
+                (Token::Ref("@4".to_string(), None), "geoCity".to_string(), Token::EscapedString("London".to_string())),
 
-                ("@5".to_string(), "dis".to_string(), Token::EscapedString("Five".to_string())),
-                ("@5".to_string(), "heat".to_string(), Token::EscapedString("heat".to_string())),   
-                ("@5".to_string(), "elec".to_string(), Token::EscapedString("elec".to_string())),  
-                ("@5".to_string(), "water".to_string(), Token::EscapedString("water".to_string())),   
-                ("@5".to_string(), "siteRef".to_string(), Token::Ref("2".to_string(), None)),         
+                (Token::Ref("@5".to_string(), None), "dis".to_string(), Token::EscapedString("Five".to_string())),
+                (Token::Ref("@5".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),   
+                (Token::Ref("@5".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),  
+                (Token::Ref("@5".to_string(), None), "water".to_string(), Token::EscapedString("water".to_string())),   
+                (Token::Ref("@5".to_string(), None), "siteRef".to_string(), Token::Ref("2".to_string(), None)),         
                 
             ]
         }
 
         println!("{:?}", filter_eval_str("elec and heat", &get_tags));
         println!("{:?}", filter_eval_str("elec or heat", &get_tags));
-        println!("{:?}", filter_eval_str("not elec", &get_tags));
-        println!("{:?}", filter_eval_str("not elec and water", &get_tags));
-        println!("{:?}", filter_eval_str("elec and siteRef->geoCity", &get_tags));
+        // println!("{:?}", filter_eval_str("not elec", &get_tags));
+        // println!("{:?}", filter_eval_str("not elec and water", &get_tags));
+        // println!("{:?}", filter_eval_str("elec and siteRef->geoCity", &get_tags));
+
+
         // assert_eq!(filter_eval_str("2 + 3"), Ok(StackValue::Value(5.)));
         // assert_eq!(filter_eval_str("2 + (3 + 4)"), Ok(StackValue::Value(9.)));
         // assert_eq!(filter_eval_str("-2 + (4 - 1)"), Ok(StackValue::Value(1.)));
