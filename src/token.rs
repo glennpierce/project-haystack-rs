@@ -125,10 +125,10 @@ impl fmt::Display for Token {
             
             Token::Ref(val, display) => {
                 if display.is_some() {
-                    return write!(f, "{}{}", val, display.clone().unwrap());
+                    return write!(f, "@{}{}", val, display.clone().unwrap());
                 }
                 else {
-                    return write!(f, "{}", val);
+                    return write!(f, "@{}", val);
                 }
             },
 

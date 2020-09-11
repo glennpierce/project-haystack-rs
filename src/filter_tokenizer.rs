@@ -157,7 +157,7 @@ fn lexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> 
 
     delimited(
           multispace0,
-          alt((name, filter_bool, filter_val, lparen)),
+          alt((not, name, filter_bool, filter_val, lparen)),
           multispace0
     )(i)
 }
@@ -166,14 +166,14 @@ fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorK
 
     delimited(
           multispace0,
-          alt((not, binop, rparen)),
+          alt((binop, rparen)),
           multispace0
     )(i)
 }
 
 fn after_rexpr_no_paren<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    delimited(multispace0, alt((not, binop)), multispace0)(i)
+    delimited(multispace0, binop, multispace0)(i)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -212,8 +212,6 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
             (TokenizerState::AfterRExpr, Some(&ParenState::Subexpr)) => after_rexpr(s),
             (TokenizerState::LExpr, _) => lexpr(s),
         };
-
-        println!("r: {:?}", r);
 
         match r {
             Ok((rest, t)) => {
@@ -356,6 +354,18 @@ mod tests {
     fn test_tokenize() {
         use super::Operation::*;
         use super::FilterToken::*;
+
+        assert_eq!(tokenize("not elec and water"), Ok(vec![
+            Unary(Not),
+            FilterToken::Name("elec".to_string()),
+            Binary(And),
+            FilterToken::Name("water".to_string()),
+        ]));
+
+        assert_eq!(tokenize("not elec"), Ok(vec![
+            Unary(Not),
+            FilterToken::Name("elec".to_string()),
+        ]));
 
         assert_eq!(tokenize("elec and heat"), Ok(vec![
             FilterToken::Name("elec".to_string()),
