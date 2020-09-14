@@ -10,6 +10,9 @@ use std::ops::Index;
 
 use crate::hval::{HVal};
 
+use std::hash::{Hash, Hasher};
+use std::cmp::Ordering;
+
 /// An error reported by the parser.
 #[derive(Debug, Clone)]
 pub enum TokenParseError {
@@ -56,8 +59,43 @@ impl std::error::Error for TokenParseError {
     }
 }
 
+// I have ZincNumber so we can implement Eq and put Tokens into HashSets etc as f64 cannot support Eq
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+pub struct ZincNumber {
+    number: f64,
+}
+
+impl ZincNumber {
+    pub fn new(f: f64) -> ZincNumber {
+        ZincNumber {
+            number: f,
+        }
+    }
+}
+
+impl Eq for ZincNumber {}
+
+impl Ord for ZincNumber {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.number.to_string().cmp(&other.number.to_string())
+    }
+}
+
+impl Hash for ZincNumber {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.number.to_string().hash(state)
+    }
+}
+
+impl fmt::Display for ZincNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.number)   
+    }
+}
+
+
 /// Expression tokens.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Clone)]
 pub enum Token {
 
     Empty, 
@@ -83,8 +121,8 @@ pub enum Token {
     Comma,
 
     /// A number and units
-    Number(f64, String),
-    /// A variable.
+    Number(ZincNumber, String),
+
     Id(String),
 
     Ref(String, Option<String>),
@@ -102,6 +140,34 @@ pub enum Token {
     Ver(String),
 }
 
+
+// impl Hash for Token {
+//     fn hash<H: Hasher>(&self, state: &mut H) {
+
+//         match &*self {
+//             Token::Empty => Token::Empty.hash(state),
+//             Token::Null => Token::Null.hash(state),
+//             Token::Marker => Token::Marker.hash(state),
+//             Token::Remove => Token::Remove.hash(state),
+//             Token::NL => Token::NL.hash(state),
+//             Token::NA => Token::NA.hash(state),
+//             Token::Bool(b) => b.hash(state),
+//             Token::Inf => Token::Inf.hash(state),
+//             Token::InfNeg => Token::InfNeg.hash(state),
+//             Token::NaN => Token::NaN.hash(state),
+//             Token::Comma => Token::Comma.hash(state),
+//             Token::Number(num, units) => (num.to_string(), units).hash(state),
+//             Token::Id(val) => val.hash(state),
+//             Token::Ref(val, display) => (val.to_string(), display).hash(state),
+//             Token::EscapedString(val) => val.hash(state),
+//             Token::Date(val) => val.hash(state),
+//             Token::Time(val) => val.hash(state),
+//             Token::DateTime(val) => val.hash(state),
+//             Token::Uri(val) => val.hash(state),
+//             Token::Ver(val) => val.hash(state),
+//         }
+//     }
+// }
 
 ////////////////////////////////////////////////////
 /// 

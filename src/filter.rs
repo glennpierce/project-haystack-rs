@@ -12,7 +12,7 @@ use std::fmt;
 use filter_tokenizer::{tokenize, FilterToken, Operation};
 use chrono::{DateTime, Utc};
 
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 
 use crate::*;
 use crate::error::*;
@@ -191,7 +191,11 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                                 println!("AND left: {:?}", left);
                                 println!("AND right: {:?}", right);
 
-                                left.intersect_if(right, |l, r| l == r)
+                                let mut v = left.intersect_if(right, |l, r| l == r);
+
+                                v.sort();
+
+                                v
 
                                 // left: [("@1", "elec", EscapedString("elec")), ("@2", "elec", EscapedString("elec"))]
                                 // right: [("@1", "heat", EscapedString("heat")), ("@3", "heat", EscapedString("heat"))]
@@ -221,11 +225,11 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                                 let mut merged = left.clone();
                                 merged.extend(right);
 
-                                //let set: HashSet<_> = merged.drain(..).collect(); // dedup
-                                //vec.extend(set.into_iter());
+                                let hs = merged.iter().cloned().collect::<HashSet<Token>>();
 
-                                merged
-
+                                let mut v: Vec<Token> = hs.into_iter().collect();
+                                v.sort();
+                                v
                             },
                         
                             Operation::Has => {

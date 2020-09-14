@@ -90,6 +90,7 @@ fn inf<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
 fn nan<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tag("NaN"), |_: &str| Token::NaN)(i)
 }
+
 fn in_quotes(buf: &str) -> IResult<&str, String> {
     let mut ret = String::new();
     let mut skip_delimiter = false;
@@ -414,7 +415,7 @@ fn simple_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)
             many1(digit1),
             opt(preceded(char('.'), many1(digit1))),
         ))),
-        |s: &str| Token::Number(s.parse::<f64>().unwrap(), "".into()),
+        |s: &str| Token::Number(ZincNumber::new(s.parse::<f64>().unwrap()), "".into()),
     )(i)
 }
 
@@ -435,7 +436,7 @@ fn units<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
 
 pub fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tuple((number, opt(units))), |t: (f64, Option<&str>)| {
-        Token::Number(t.0, t.1.unwrap_or(&"".to_string()).into())
+        Token::Number(ZincNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
     })(i)
 }
 
@@ -852,7 +853,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("32143m"),
-            Ok(("", Token::Number(32143f64, "m".into())))
+            Ok(("", Token::Number(ZincNumber::new(32143f64), "m".into())))
         );
 
         assert_nom_fn_eq!(
@@ -908,7 +909,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("32143m"),
-            Ok(("", Token::Number(32143f64, "m".into())))
+            Ok(("", Token::Number(ZincNumber::new(32143f64), "m".into())))
         );
 
         assert_nom_fn_is_ok!(dict(r#"{id:@hisId projName:"test"}"#));
@@ -1223,23 +1224,23 @@ mod tests {
 
         assert_eq!(
             simple_number("32143"),
-            Ok(("", Token::Number(32143f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(32143f64), "".into())))
         );
         assert_eq!(
             simple_number("2"),
-            Ok(("", Token::Number(2.0f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(2.0f64), "".into())))
         );
         assert_eq!(
             simple_number("32143.25"),
-            Ok(("", Token::Number(32143.25f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(32143.25f64), "".into())))
         );
         assert_eq!(
             simple_number("-0.125"),
-            Ok(("", Token::Number(-0.125f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(-0.125f64), "".into())))
         );
         assert_eq!(
             simple_number("+674.96"),
-            Ok(("", Token::Number(674.96f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(674.96f64), "".into())))
         );
 
         assert_eq!(number("1"), Ok(("", 1f64)));
@@ -1260,26 +1261,26 @@ mod tests {
 
         assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
 
-        assert_eq!(zinc_number("1"), Ok(("", Token::Number(1f64, "".into()))));
+        assert_eq!(zinc_number("1"), Ok(("", Token::Number(ZincNumber::new(1f64), "".into()))));
 
         assert_eq!(
             zinc_number("5.4"),
-            Ok(("", Token::Number(5.4f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(5.4f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("-5.4"),
-            Ok(("", Token::Number(-5.4f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(-5.4f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("-5.4e-45"),
-            Ok(("", Token::Number(-5.4e-45f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(-5.4e-45f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("67.3E7"),
-            Ok(("", Token::Number(67.3E7f64, "".into())))
+            Ok(("", Token::Number(ZincNumber::new(67.3E7f64), "".into())))
         );
 
         assert_eq!(zinc_number("Inf"), Ok(("", Token::Inf)));
@@ -1295,7 +1296,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("-5.4e-45Kg"),
-            Ok(("", Token::Number(-5.4e-45f64, "Kg".into())))
+            Ok(("", Token::Number(ZincNumber::new(-5.4e-45f64), "Kg".into())))
         );
 
         assert_eq!(null("N"), Ok(("", Token::Null)));
