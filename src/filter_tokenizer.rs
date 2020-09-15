@@ -16,18 +16,6 @@ use crate::token::*;
 use crate::error::FilterTokenParseError;
 use crate::zinc_tokenizer::{number_with_unit, zinc_ref, quoted_string, time_with_subseconds, uri, date, zinc_id};
 
-
-// fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
-//     map(alt((tag("true"), tag("false"))), |o: &str| {
-//         if o == "false" {
-//             FilterToken::Bool(false)
-//         } else {
-//             FilterToken::Bool(true)
-//         }
-//     })(i)
-// }
-
-
 fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(alt((tag("true"), tag("false"))), |o: &str| {
         if o == "false" {
@@ -36,45 +24,6 @@ fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> 
             Token::Bool(true)
         }
     })(i)
-}
-
-// equipRef->siteRef->dis
-// equipRef has siteRef which has a dis tag
-// <path>       :=  <name> ("->" <name>)*
-fn name<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
-    map( 
-        zinc_id, 
-            |t: Token| {
-    
-                match t {
-                    
-                    Token::Id(val) => FilterToken::Name(val),
-                    _ => unreachable!(),
-                }
-            }
-    )(i)
-}
-
-fn not<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
-    map(tag("not"), |_: &str| FilterToken::Unary(Operation::Not))(i)
-}
-
-/// Expression tokens.
-#[derive(Debug, PartialEq, Clone)]
-pub enum FilterToken {
-    /// Binary operation.
-    Binary(Operation),
-    /// Unary operation.
-    Unary(Operation),
-
-    /// Left parenthesis.
-    LParen,
-    /// Right parenthesis.
-    RParen,
-
-    Bool(bool),
-    Name(String),
-    Val(Token),
 }
 
 // <val>        :=  <bool> | <ref> | <str> | <uri> |
@@ -101,7 +50,7 @@ fn filter_val<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKi
         
         match &t {
             
-            Token::Bool(b) => FilterToken::Bool(*b),
+            Token::Bool(b) => FilterToken::Val(Token::Bool(*b)),
             Token::Number(num, units) => FilterToken::Val(t),
             //Token::Id(val) => FilterToken::Name(val),
             Token::Ref(val, display) => FilterToken::Val(t),
@@ -114,6 +63,163 @@ fn filter_val<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKi
 
     })(i)
 }
+
+// equipRef->siteRef->dis
+// equipRef has siteRef which has a dis tag
+// <path>       :=  <name> ("->" <name>)*
+// fn name<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+//     map( 
+//         zinc_id, 
+//             |t: Token| {
+    
+//                 match t {
+                    
+//                     Token::Id(val) => FilterToken::Path(vec![Box::new(t)]),
+//                     _ => unreachable!(),
+//                 }
+//             }
+//     )(i)
+// }
+
+fn name_path<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    map( 
+        zinc_id, |t: Token| { FilterToken::Path(vec![t]) }
+    )(i)
+}
+
+fn name_path_list<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    map( 
+        separated_list(tag("->"), zinc_id), 
+            |v: Vec<Token>| 
+                { 
+                    let tmp: Vec<Token> = v.iter().map(|i| i.clone()).collect();
+                    FilterToken::Path(tmp)
+                }
+    )(i)
+}
+
+fn path<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    alt(( name_path_list, name_path ) ) (i)
+}
+
+// fn cmp_op<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+//     // one_of matches one of the characters we give it
+//     let (i, t) = alt((tag("=="), tag("!="), tag("<"), tag("<="), tag(">"), tag(">=")))(i)?;
+  
+//     Ok((
+//       i,
+//       match t {
+//         "==" => FilterToken::Binary(Operation::Equals),
+//         "!=" => FilterToken::Binary(Operation::NotEquals),
+//         "<" => FilterToken::Binary(Operation::LessThan),
+//         "<=" => FilterToken::Binary(Operation::LessThanEquals),
+//         ">" => FilterToken::Binary(Operation::MoreThan),
+//         ">=" => FilterToken::Binary(Operation::MoreThanEquals),
+//         _ => unreachable!(),
+//       },
+//     ))
+// }
+
+fn cmp_op<'a>(i: &'a str) -> IResult<&'a str, Operation, (&'a str, ErrorKind)> {
+    // one_of matches one of the characters we give it
+    let (i, t) = alt((tag("=="), tag("!="), tag("<"), tag("<="), tag(">"), tag(">=")))(i)?;
+  
+    Ok((
+      i,
+      match t {
+        "==" => Operation::Equals,
+        "!=" => Operation::NotEquals,
+        "<" => Operation::LessThan,
+        "<=" => Operation::LessThanEquals,
+        ">" => Operation::MoreThan,
+        ">=" => Operation::MoreThanEquals,
+        _ => unreachable!(),
+      },
+    ))
+}
+
+fn multispacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
+where
+    F: Fn(I) -> IResult<I, O, E>,
+    I: nom::InputTakeAtPosition,
+    <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
+    E: nom::error::ParseError<I>,
+{
+    delimited(multispace0, f, multispace0)
+}
+
+// fn cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+//     map(tuple((multispacey(path), cmp_op, multispacey(filter_val))), 
+//         |t| {
+//             FilterToken::Compare(Box::new(t.0), Box::new(t.1), Box::new(t.2))
+//         }
+//     )(i)
+// }
+
+fn cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    map(tuple((multispacey(path), cmp_op, multispacey(filter_val))), 
+        |t| {
+            FilterToken::Compare(Box::new(t.0), t.1, Box::new(t.2))
+        }
+    )(i)
+}
+
+fn and<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    map(tag("and"), |o: &str| { FilterToken::Binary(Operation::And)})(i)
+}
+
+fn or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    map(tag("or"), |o: &str| { FilterToken::Binary(Operation::Or)})(i)
+}
+
+fn and_or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    
+    alt((and, or))(i)
+}
+
+fn not<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    map(tag("not"), |o: &str| { FilterToken::Unary(Operation::Not)})(i)
+}
+
+fn term<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    alt((cmp, not, path))(i)
+}
+
+// fn filter<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    
+//     separated_pair(term, and_or, term),
+
+//     alt((path, not, cmp))(i)
+// }
+
+/// Expression tokens.
+#[derive(Debug, PartialEq, Clone)]
+pub enum FilterToken {
+    /// Binary operation.
+    Binary(Operation),
+    /// Unary operation.
+    Unary(Operation),
+
+    /// Left parenthesis.
+    LParen,
+    /// Right parenthesis.
+    RParen,
+
+    Compare(Box<FilterToken>, Operation, Box<FilterToken>),
+
+    //Bool(bool),
+    //Name(String),
+    Path(Vec<Token>),   // Vector of id types
+    Val(Token),
+}
+
+
 
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -135,26 +241,26 @@ pub enum Operation {
 /// Continuing the trend of starting from the simplest piece and building up,
 /// we start by creating a parser for the built-in operator functions.
 /// "=" | "!=" | "<" | "<=" | ">" | ">="
-fn binop<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
-    // one_of matches one of the characters we give it
-    let (i, t) = alt((tag("or"), tag("and"), tag("->"), tag("=="), tag("!="), tag("<"), tag("<="), tag(">"), tag(">=")))(i)?;
+// fn binop<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+//     // one_of matches one of the characters we give it
+//     let (i, t) = alt((tag("or"), tag("and"), tag("->"), tag("=="), tag("!="), tag("<"), tag("<="), tag(">"), tag(">=")))(i)?;
   
-    Ok((
-      i,
-      match t {
-        "or" => FilterToken::Binary(Operation::Or),
-        "and" => FilterToken::Binary(Operation::And),
-        "->" => FilterToken::Binary(Operation::Has),
-        "==" => FilterToken::Binary(Operation::Equals),
-        "!=" => FilterToken::Binary(Operation::NotEquals),
-        "<" => FilterToken::Binary(Operation::LessThan),
-        "<=" => FilterToken::Binary(Operation::LessThanEquals),
-        ">" => FilterToken::Binary(Operation::MoreThan),
-        ">=" => FilterToken::Binary(Operation::MoreThanEquals),
-        _ => unreachable!(),
-      },
-    ))
-  }
+//     Ok((
+//       i,
+//       match t {
+//         "or" => FilterToken::Binary(Operation::Or),
+//         "and" => FilterToken::Binary(Operation::And),
+//         "->" => FilterToken::Binary(Operation::Has),
+//         "==" => FilterToken::Binary(Operation::Equals),
+//         "!=" => FilterToken::Binary(Operation::NotEquals),
+//         "<" => FilterToken::Binary(Operation::LessThan),
+//         "<=" => FilterToken::Binary(Operation::LessThanEquals),
+//         ">" => FilterToken::Binary(Operation::MoreThan),
+//         ">=" => FilterToken::Binary(Operation::MoreThanEquals),
+//         _ => unreachable!(),
+//       },
+//     ))
+//   }
   
 fn lparen<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     map(tag("("), |_: &str| FilterToken::LParen)(i)
@@ -168,7 +274,7 @@ fn lexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> 
 
     delimited(
           multispace0,
-          alt((not, name, lparen)),
+          alt((lparen, term)),
           multispace0
     )(i)
 }
@@ -177,14 +283,14 @@ fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorK
 
     delimited(
           multispace0,
-          alt((binop, filter_val, rparen)),
+          alt((and_or, filter_val, rparen)),
           multispace0
     )(i)
 }
 
 fn after_rexpr_no_paren<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    delimited(multispace0, binop, multispace0)(i)
+    delimited(multispace0, and_or, multispace0)(i)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -218,11 +324,15 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 
     while !s.is_empty() {
 
+        println!("s: {:?},   state: {:?}", s, state);
+
         let r = match (state, paren_stack.last()) {
             (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren(s),
             (TokenizerState::AfterRExpr, Some(&ParenState::Subexpr)) => after_rexpr(s),
             (TokenizerState::LExpr, _) => lexpr(s),
         };
+
+        println!("r: {:?}", r);
 
         match r {
             Ok((rest, t)) => {
@@ -234,7 +344,7 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
                     FilterToken::RParen => {
                         paren_stack.pop().expect("The paren_stack is empty!");
                     }
-                    FilterToken::Val(_) | FilterToken::Name(_) | FilterToken::Bool(_) => {
+                    FilterToken::Val(_) | FilterToken::Path(_) |  FilterToken::Compare(_, _, _) => {
                         state = TokenizerState::AfterRExpr;
                     }
                     FilterToken::Binary(_) => {
@@ -254,7 +364,9 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
                 //    _ => (),
               //  }
 
-                return Err(FilterTokenParseError::UnknownError);
+                println!("Tokenize {:?}", e);
+
+                return Err(FilterTokenParseError::UnknownFilterTokenParseError);
             }
             // Error(Err::Position(_, p)) => {
             //     let (i, _) = slice_to_offsets(input, p);
@@ -288,17 +400,31 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 #[cfg(test)]
 mod tests {
     use super::*;
- 
+
+    macro_rules! id_to_token {
+        ($a:expr) => {
+            Token::Id($a.to_string())
+        };
+    }
+
+    macro_rules! id_to_path {
+        ($a:expr) => {
+            FilterToken::Path(vec![Token::Id($a.to_string())])
+        };
+    }
+
     #[test]
     fn basic_tests() {
 
+        use super::FilterToken::*;
+
         assert_eq!(
-            binop("or"),
+            and_or("or"),
             Ok(("", FilterToken::Binary(Operation::Or)))
         );
         assert_eq!(
-            name("abc32"),
-            Ok(("", FilterToken::Name("abc32".to_string())))
+            path("abc32"),
+            Ok(("", FilterToken::Path(vec![Token::Id("abc32".to_string())])))
         );
         assert_eq!(
             lparen("("),
@@ -308,6 +434,14 @@ mod tests {
             rparen(")"),
             Ok(("", FilterToken::RParen))
         );
+        assert_eq!(
+            path("siteRef->cityName->houseName"),
+            Ok(("", FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("cityName"), id_to_token!("houseName")])))
+        );
+        assert_eq!(
+            path("siteRef"),
+            Ok(("", FilterToken::Path(vec![id_to_token!("siteRef")])))
+        );
     }
 
     #[test]
@@ -316,8 +450,11 @@ mod tests {
         // and can't be at from so should be interpreted as name
         assert_eq!(
             lexpr("and elec and heat "),
-            Ok(("elec and heat ", FilterToken::Name("and".to_string())))
+            Ok(("elec and heat ", FilterToken::Path(vec![id_to_token!("and")])))
         );
+
+        println!("{:?}", lexpr("(heat or water)"));
+
     }
 
     #[test]
@@ -327,91 +464,102 @@ mod tests {
 
         assert_eq!(tokenize("not elec and water"), Ok(vec![
             Unary(Not),
-            FilterToken::Name("elec".to_string()),
+            id_to_path!("elec"),
             Binary(And),
-            FilterToken::Name("water".to_string()),
+            id_to_path!("water")
         ]));
 
         assert_eq!(tokenize("not elec"), Ok(vec![
             Unary(Not),
-            FilterToken::Name("elec".to_string()),
+            id_to_path!("elec"),
         ]));
 
         assert_eq!(tokenize("elec and heat"), Ok(vec![
-            FilterToken::Name("elec".to_string()),
+            id_to_path!("elec"),
             Binary(And),
-            FilterToken::Name("heat".to_string()),
+            id_to_path!("heat"),
         ]));
 
         assert_eq!(tokenize("elecandheat"), Ok(vec![
-            FilterToken::Name("elecandheat".to_string()),
+            id_to_path!("elecandheat"),
         ]));
 
         assert_eq!(tokenize("elec or heat"), Ok(vec![
-            FilterToken::Name("elec".to_string()),
+            id_to_path!("elec"),
             Binary(Or),
-            FilterToken::Name("heat".to_string()),
+            id_to_path!("heat"),
         ]));
 
         assert_eq!(tokenize("elec->heat"), Ok(vec![
-            FilterToken::Name("elec".to_string()),
-            Binary(Has),
-            FilterToken::Name("heat".to_string()),
-        ]));
-
-        assert_eq!(tokenize("elec -> heat"), Ok(vec![
-            FilterToken::Name("elec".to_string()),
-            Binary(Has),
-            FilterToken::Name("heat".to_string()),
-        ]));
-
-        assert_eq!(tokenize("equip and siteRef->geoCity"), Ok(vec![
-            FilterToken::Name("equip".to_string()),
-            Binary(And),
-            FilterToken::Name("siteRef".to_string()),
-            Binary(Has),
-            FilterToken::Name("geoCity".to_string()),
-        ]));
-
-        assert_eq!(tokenize("geoCity == \"Chicago\""), Ok(vec![
-            FilterToken::Name("geoCity".to_string()),
-            Binary(Equals),
-            FilterToken::Val(Token::EscapedString("Chicago".to_string())),
+            FilterToken::Path(vec![id_to_token!("elec"), id_to_token!("heat")])
         ]));
 
         assert_eq!(tokenize("elec and (heat or water)"), Ok(vec![
-            FilterToken::Name("elec".to_string()),
+
+            id_to_path!("elec"),
             Binary(And),
             LParen,
-            FilterToken::Name("heat".to_string()),
-            Binary(Or),
-            FilterToken::Name("water".to_string()),
-            RParen,
+            id_to_path!("heat"),
+            Binary(Or), 
+            id_to_path!("water"),
+            RParen
+       ]));
+
+        assert_eq!(tokenize("equip and siteRef->geoCity"), Ok(vec![
+
+            id_to_path!("equip"),
+            Binary(And),
+            FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity")]),
         ]));
 
-        assert_eq!(tokenize("equip and siteRef->geoCity->dis == \"Chicago\""), Ok(vec![
-            FilterToken::Name("equip".to_string()),
-            Binary(And),
-            FilterToken::Name("siteRef".to_string()),
-            Binary(Has),
-            FilterToken::Name("geoCity".to_string()),
-            Binary(Has),
-            FilterToken::Name("dis".to_string()),
-            Binary(Equals),
-            FilterToken::Val(Token::EscapedString("Chicago".to_string())),
-        ]));
+        assert_eq!(tokenize("geoCity == \"Chicago\""), Ok(
+            vec![
+                Compare(Box::new(id_to_path!("geoCity")),
+                        Operation::Equals,
+                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
+                    )
+            ]
+        ));
 
-        assert_eq!(tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"), Ok(vec![
-            FilterToken::Name("equip".to_string()),
-            Binary(And),
-            FilterToken::Val(Token::EscapedString("Chicago".to_string())),
-            Binary(Equals),
-            FilterToken::Name("siteRef".to_string()),
-            Binary(Has),
-            FilterToken::Name("geoCity".to_string()),
-            Binary(Has),
-            FilterToken::Name("dis".to_string()),
-        ]));
+        assert_eq!(tokenize("equip and siteRef->geoCity->dis == \"Chicago\""), Ok(
+            vec![
+                id_to_path!("equip"),
+                Binary(And),
+
+                Compare(
+                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
+                        Operation::Equals,
+                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
+                    )
+            ]
+        ));
+
+        assert_eq!(tokenize("equip and siteRef->geoCity->carnego_number_of_bedrooms > 5"), Ok(
+            vec![
+                id_to_path!("equip"),
+                Binary(And),
+
+                Compare(
+                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("carnego_number_of_bedrooms")])),
+                        Operation::MoreThan,
+                        Box::new( FilterToken::Val( Token::Number(ZincNumber::new(5.0), "".to_string()) ) )
+                    )
+            ]
+        ));
+
+        println!("{:?}", tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"));
+
+        // assert_eq!(tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"), Ok(vec![
+        //     FilterToken::Name("equip".to_string()),
+        //     Binary(And),
+        //     FilterToken::Val(Token::EscapedString("Chicago".to_string())),
+        //     Binary(Equals),
+        //     FilterToken::Name("siteRef".to_string()),
+        //     Binary(Has),
+        //     FilterToken::Name("geoCity".to_string()),
+        //     Binary(Has),
+        //     FilterToken::Name("dis".to_string()),
+        // ]));
 
     }
 }

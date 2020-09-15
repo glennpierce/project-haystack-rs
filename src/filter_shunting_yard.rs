@@ -64,8 +64,8 @@ pub fn to_rpn(input: &[FilterToken]) -> Result<Vec<FilterToken>, RPNError> {
         let token = token.clone();
         match token {
             FilterToken::Val(_) => output.push(token),
-            FilterToken::Name(_) => output.push(token),
-            FilterToken::Bool(_) => output.push(token),
+            FilterToken::Path(_) => output.push(token),
+            FilterToken::Compare(_, _, _) => output.push(token),
             FilterToken::Unary(_) => stack.push((index, token)),
             FilterToken::Binary(_) => {
                 let pa1 = prec_assoc(&token);
@@ -117,8 +117,8 @@ pub fn to_rpn(input: &[FilterToken]) -> Result<Vec<FilterToken>, RPNError> {
     for (index, token) in output.iter().enumerate() {
         match *token {
             FilterToken::Val(_) => n_operands += 1,
-            FilterToken::Name(_) => n_operands += 1,
-            FilterToken::Bool(_) => n_operands += 1,
+            FilterToken::Path(_) => n_operands += 1,
+            FilterToken::Compare(_, _, _) => n_operands += 1,
             FilterToken::Unary(_) => (),
             FilterToken::Binary(_) => n_operands -= 1,
             _ => panic!("Nothing else should be here"),
@@ -141,11 +141,24 @@ mod tests {
     use super::*;
     use FilterToken::*;
 
+    macro_rules! id_to_token {
+        ($a:expr) => {
+            Token::Id($a.to_string())
+        };
+    }
+
+    macro_rules! id_to_path {
+        ($a:expr) => {
+            FilterToken::Path(vec![Token::Id($a.to_string())])
+        };
+    }
+
     #[test]
     fn test_to_rpn() {
 
-        assert_eq!(to_rpn(&[FilterToken::Name("elec".to_string()), Binary(Operation::And), FilterToken::Name("heat".to_string())]),
-            Ok(vec![FilterToken::Name("elec".to_string()), FilterToken::Name("heat".to_string()), Binary(Operation::And)]));
+
+        assert_eq!(to_rpn(&tokenize("elec and heat").unwrap()),
+            Ok(vec![id_to_path!("elec"), id_to_path!("heat"), Binary(Operation::And)]));
 
         // equip and siteRef->geoCity == "Chicago"
         // The way to read the above expression is match an entity if:
@@ -156,10 +169,14 @@ mod tests {
         // and that the site's geoCity tag is equal to "Chicago"
 
         assert_eq!(to_rpn(&tokenize("equip and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
-            Ok(vec![FilterToken::Name("equip".to_string()), FilterToken::Name("siteRef".to_string()),
-                    FilterToken::Name("geoCity".to_string()), Binary(Operation::Has),
-                    FilterToken::Name("dis".to_string()), Binary(Operation::Has),
-                    FilterToken::Val(Token::EscapedString("Chicago".to_string())), Binary(Operation::Equals), Binary(Operation::And)]));
+            Ok(vec![id_to_path!("equip"),
+                    Compare(
+                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
+                        Operation::Equals,
+                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
+                    )
+                    ,
+                    Binary(Operation::And)]));
 
         // In RPN, the numbers and operators are listed one after another, and an operator always acts on the most recent numbers in the list.
 
@@ -171,141 +188,6 @@ mod tests {
         // Apply binary has to  geoCity has dis. Add dis if exists    stack = [dis, equip]
         // push EscapedString("Chicago") to stack   stack = [EscapedString("Chicago"), dis, equip]
         // Apply equals to dis == EscapedString("Chicago")  
-
-        // assert_eq!(
-        //     to_rpn(&[Number(1.), Binary(Plus), Number(2.)]),
-        //     Ok(vec![Number(1.), Number(2.), Binary(Plus)])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[Unary(Minus), Number(1.), Binary(Pow), Number(2.)]),
-        //     Ok(vec![Number(1.), Number(2.), Binary(Pow), Unary(Minus)])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[Number(1.), Unary(Fact), Binary(Pow), Number(2.)]),
-        //     Ok(vec![Number(1.), Unary(Fact), Number(2.), Binary(Pow)])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[
-        //         Number(1.),
-        //         Unary(Fact),
-        //         Binary(Div),
-        //         LParen,
-        //         Number(2.),
-        //         Binary(Plus),
-        //         Number(3.),
-        //         RParen,
-        //         Unary(Fact)
-        //     ]),
-        //     Ok(vec![
-        //         Number(1.),
-        //         Unary(Fact),
-        //         Number(2.),
-        //         Number(3.),
-        //         Binary(Plus),
-        //         Unary(Fact),
-        //         Binary(Div)
-        //     ])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[
-        //         Number(3.),
-        //         Binary(Minus),
-        //         Number(1.),
-        //         Binary(Times),
-        //         Number(2.)
-        //     ]),
-        //     Ok(vec![
-        //         Number(3.),
-        //         Number(1.),
-        //         Number(2.),
-        //         Binary(Times),
-        //         Binary(Minus)
-        //     ])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[
-        //         LParen,
-        //         Number(3.),
-        //         Binary(Minus),
-        //         Number(1.),
-        //         RParen,
-        //         Binary(Times),
-        //         Number(2.)
-        //     ]),
-        //     Ok(vec![
-        //         Number(3.),
-        //         Number(1.),
-        //         Binary(Minus),
-        //         Number(2.),
-        //         Binary(Times)
-        //     ])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[
-        //         Number(1.),
-        //         Binary(Minus),
-        //         Unary(Minus),
-        //         Unary(Minus),
-        //         Number(2.)
-        //     ]),
-        //     Ok(vec![
-        //         Number(1.),
-        //         Number(2.),
-        //         Unary(Minus),
-        //         Unary(Minus),
-        //         Binary(Minus)
-        //     ])
-        // );
-        // assert_eq!(
-        //     to_rpn(&[Var("x".into()), Binary(Plus), Var("y".into())]),
-        //     Ok(vec![Var("x".into()), Var("y".into()), Binary(Plus)])
-        // );
-
-        // assert_eq!(
-        //     to_rpn(&[
-        //         Func("max".into(), None),
-        //         Func("sin".into(), None),
-        //         Number(1f64),
-        //         RParen,
-        //         Comma,
-        //         Func("cos".into(), None),
-        //         Number(2f64),
-        //         RParen,
-        //         RParen
-        //     ]),
-        //     Ok(vec![
-        //         Number(1f64),
-        //         Func("sin".into(), Some(1)),
-        //         Number(2f64),
-        //         Func("cos".into(), Some(1)),
-        //         Func("max".into(), Some(2))
-        //     ])
-        // );
-
-        // assert_eq!(to_rpn(&[Binary(Plus)]), Err(RPNError::NotEnoughOperands(0)));
-        // assert_eq!(
-        //     to_rpn(&[Func("f".into(), None), Binary(Plus), RParen]),
-        //     Err(RPNError::NotEnoughOperands(0))
-        // );
-        // assert_eq!(
-        //     to_rpn(&[Var("x".into()), Number(1.)]),
-        //     Err(RPNError::TooManyOperands)
-        // );
-        // assert_eq!(to_rpn(&[LParen]), Err(RPNError::MismatchedLParen(0)));
-        // assert_eq!(to_rpn(&[RParen]), Err(RPNError::MismatchedRParen(0)));
-        // assert_eq!(
-        //     to_rpn(&[Func("sin".into(), None)]),
-        //     Err(RPNError::MismatchedLParen(0))
-        // );
-        // assert_eq!(to_rpn(&[Comma]), Err(RPNError::UnexpectedComma(0)));
-        // assert_eq!(
-        //     to_rpn(&[Func("f".into(), None), Comma]),
-        //     Err(RPNError::MismatchedLParen(0))
-        // );
-        // assert_eq!(
-        //     to_rpn(&[Func("f".into(), None), LParen, Comma, RParen]),
-        //     Err(RPNError::UnexpectedComma(2))
-        // );
 
     }
 }

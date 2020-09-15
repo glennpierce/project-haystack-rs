@@ -146,7 +146,7 @@ pub enum FilterTokenParseError {
     /// Missing operator or function argument at the end of the expression.
     MissingArgument,
 
-    UnknownError
+    UnknownFilterTokenParseError
 }
 
 impl fmt::Display for FilterTokenParseError {
@@ -161,7 +161,7 @@ impl fmt::Display for FilterTokenParseError {
                 if *i == 1 { "is" } else { "es" }
             ),
             FilterTokenParseError::MissingArgument => write!(f, "Missing argument at the end of expression."),
-            FilterTokenParseError::UnknownError => write!(f, "Unknown pass error."),
+            FilterTokenParseError::UnknownFilterTokenParseError => write!(f, "Unknown filter pass error."),
         }
     }
 }
@@ -173,7 +173,7 @@ impl std::error::Error for FilterTokenParseError {
             FilterTokenParseError::UnexpectedStrToken(_) => "Unexpected token",
             FilterTokenParseError::MissingRParen(_) => "missing right parenthesis",
             FilterTokenParseError::MissingArgument => "missing argument",
-            FilterTokenParseError::UnknownError => "unknown error",
+            FilterTokenParseError::UnknownFilterTokenParseError => "unknown filter error",
         }
     }
 }
