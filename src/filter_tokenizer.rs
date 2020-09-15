@@ -17,16 +17,26 @@ use crate::error::FilterTokenParseError;
 use crate::zinc_tokenizer::{number_with_unit, zinc_ref, quoted_string, time_with_subseconds, uri, date, zinc_id};
 
 
-fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+// fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+//     map(alt((tag("true"), tag("false"))), |o: &str| {
+//         if o == "false" {
+//             FilterToken::Bool(false)
+//         } else {
+//             FilterToken::Bool(true)
+//         }
+//     })(i)
+// }
+
+
+fn filter_bool<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(alt((tag("true"), tag("false"))), |o: &str| {
         if o == "false" {
-            FilterToken::Bool(false)
+            Token::Bool(false)
         } else {
-            FilterToken::Bool(true)
+            Token::Bool(true)
         }
     })(i)
 }
-
 
 // equipRef->siteRef->dis
 // equipRef has siteRef which has a dis tag
@@ -84,13 +94,14 @@ fn filter_val<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKi
         date,
         time_with_subseconds,
         number_with_unit,
+        filter_bool,
         //bool,
         //zinc_id,      // This is what I added. Not in spec as <name> seems to be undefined  Going to use FilterToken::Id to represent this
     )), |t: Token| {
         
         match &t {
             
-            //Token::Bool(b) => FilterToken::Bool(*b),
+            Token::Bool(b) => FilterToken::Bool(*b),
             Token::Number(num, units) => FilterToken::Val(t),
             //Token::Id(val) => FilterToken::Name(val),
             Token::Ref(val, display) => FilterToken::Val(t),
@@ -157,7 +168,7 @@ fn lexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> 
 
     delimited(
           multispace0,
-          alt((not, name, filter_bool, filter_val, lparen)),
+          alt((not, name, lparen)),
           multispace0
     )(i)
 }
@@ -166,7 +177,7 @@ fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorK
 
     delimited(
           multispace0,
-          alt((binop, rparen)),
+          alt((binop, filter_val, rparen)),
           multispace0
     )(i)
 }
@@ -274,26 +285,6 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 }
 
 
-// fn spacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
-// where
-//     F: Fn(I) -> IResult<I, O, E>,
-//     I: nom::InputTakeAtPosition,
-//     <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
-//     E: nom::error::ParseError<I>,
-// {
-//     delimited(space0, f, space0)
-// }
-
-// fn multispacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
-// where
-//     F: Fn(I) -> IResult<I, O, E>,
-//     I: nom::InputTakeAtPosition,
-//     <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
-//     E: nom::error::ParseError<I>,
-// {
-//     delimited(multispace0, f, multispace0)
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,33 +313,12 @@ mod tests {
     #[test]
     fn test_lexpr() {
 
+        // and can't be at from so should be interpreted as name
         assert_eq!(
             lexpr("and elec and heat "),
-            Ok(("and elec and heat ", FilterToken::Binary(Operation::And)))
+            Ok(("elec and heat ", FilterToken::Name("and".to_string())))
         );
-        
-
-        // println!("{:?}", number("+(3--2) "));
-
-        // assert_eq!(
-        //     lexpr("+(3--2) "),
-        //     Ok(("+(3--2) ", FilterToken::Binary(Operation::Plus)))
-        // );
-
     }
-
-    // #[test]
-    // fn test_var() {
-    //     for &s in ["abc", "U0", "_034", "a_be45EA", "aAzZ_"].iter() {
-    //         assert_eq!(
-    //             var(s),
-    //             Ok(("", FilterToken::Var(s.into())))
-    //         );
-    //     }
-
-    //     assert_eq!(var(""), Err(Err::Error(("", nom::error::ErrorKind::OneOf))));
-    //     assert_eq!(var("0"), Err(Err::Error(("0", nom::error::ErrorKind::OneOf))));
-    // }
 
     #[test]
     fn test_tokenize() {
@@ -443,90 +413,5 @@ mod tests {
             FilterToken::Name("dis".to_string()),
         ]));
 
-        // assert_eq!(tokenize("a"), Ok(vec![Var("a".into())]));
-
-        // assert_eq!(
-        //     tokenize("2 +(3--2) "),
-        //     Ok(vec![
-        //         Number(2f64),
-        //         Binary(Plus),
-        //         LParen,
-        //         Number(3f64),
-        //         Binary(Minus),
-        //         Unary(Minus),
-        //         Number(2f64),
-        //         RParen
-        //     ])
-        // );
-
-        // assert_eq!(
-        //     tokenize("-2^ ab0 *12 - C_0"),
-        //     Ok(vec![
-        //         Unary(Minus),
-        //         Number(2f64),
-        //         Binary(Pow),
-        //         Var("ab0".into()),
-        //         Binary(Times),
-        //         Number(12f64),
-        //         Binary(Minus),
-        //         Var("C_0".into()),
-        //     ])
-        // );
-
-        // assert_eq!(
-        //     tokenize("-sin(pi * 3)^ cos(2) / Func2(x, f(y), z) * _buildIN(y)"),
-        //     Ok(vec![
-        //         Unary(Minus),
-        //         Func("sin".into(), None),
-        //         Var("pi".into()),
-        //         Binary(Times),
-        //         Number(3f64),
-        //         RParen,
-        //         Binary(Pow),
-        //         Func("cos".into(), None),
-        //         Number(2f64),
-        //         RParen,
-        //         Binary(Div),
-        //         Func("Func2".into(), None),
-        //         Var("x".into()),
-        //         Comma,
-        //         Func("f".into(), None),
-        //         Var("y".into()),
-        //         RParen,
-        //         Comma,
-        //         Var("z".into()),
-        //         RParen,
-        //         Binary(Times),
-        //         Func("_buildIN".into(), None),
-        //         Var("y".into()),
-        //         RParen,
-        //     ])
-        // );
-
-        // assert_eq!(
-        //     tokenize("2 % 3"),
-        //     Ok(vec![Number(2f64), Binary(Rem), Number(3f64)])
-        // );
-
-        // assert_eq!(
-        //     tokenize("1 + 3! + 1"),
-        //     Ok(vec![
-        //         Number(1f64),
-        //         Binary(Plus),
-        //         Number(3f64),
-        //         Unary(Fact),
-        //         Binary(Plus),
-        //         Number(1f64)
-        //     ])
-        // );
-
-        // assert_eq!(tokenize("()"), Err(FilterTokenParseError::UnexpectedStrToken(")".to_string())));
-
-        // assert_eq!(tokenize(""), Err(FilterTokenParseError::MissingArgument));
-        // assert_eq!(tokenize("2)"), Err(FilterTokenParseError::UnexpectedStrToken(")".to_string())));
-        // assert_eq!(tokenize("2^"), Err(FilterTokenParseError::MissingArgument));
-        // assert_eq!(tokenize("(((2)"), Err(FilterTokenParseError::MissingRParen(2)));
-        // assert_eq!(tokenize("f(2,)"), Err(FilterTokenParseError::UnexpectedStrToken(")".to_string())));
-        // assert_eq!(tokenize("f(,2)"), Err(FilterTokenParseError::UnexpectedStrToken(",2)".to_string())));
     }
 }
