@@ -42,7 +42,3 @@ version = "0.2"
 [[bin]]
 name = "test_server"
 path = "src/test_server.rs"
-
-[[bin]]
-name = "create_password"
-path = "src/test_create_password.rs"
