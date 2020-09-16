@@ -324,7 +324,7 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 
     while !s.is_empty() {
 
-        println!("s: {:?},   state: {:?}", s, state);
+        // println!("s: {:?},   state: {:?}", s, state);
 
         let r = match (state, paren_stack.last()) {
             (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren(s),
@@ -332,7 +332,7 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
             (TokenizerState::LExpr, _) => lexpr(s),
         };
 
-        println!("r: {:?}", r);
+        // println!("r: {:?}", r);
 
         match r {
             Ok((rest, t)) => {

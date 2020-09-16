@@ -199,28 +199,6 @@ fn filter_tokens_by_ref_type(v: &Vec<Token>) -> Vec<Token> {
     v.iter().flat_map(|t| match_refs(t) ).collect()
 }
 
-// pub fn contains_ref_with_id_and_value(v: &Vec<Tag>, id_token: &Token, value: &str) -> bool
-// {
-//     // let id_str_option = match id_token {
-//     //     Token::Id(id) => Some(id.clone()),
-//     //     _ => None
-//     // };
-
-//     // if id_str_option.is_none() {
-//     //     return false;
-//     // }
-
-//     // let id = id_str_option.unwrap();
-    
-//     print!("here: {:?}", id_token);
-
-//     let result = v.iter().filter(|&t| t.contains_ref_with_id_and_value(id_token, value)).peekable().peek().is_some();
-
-//     println!("  result: {:?}", result);
-
-//     result
-// }
-
 pub fn contains_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> bool
 {
   //  print!("here: {:?}", id_token);
@@ -252,6 +230,53 @@ pub fn find_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> Option<Token>
 }
 
 
+fn ids_containing_tag(entities: &RefTags, token: &Token) -> RefTags {
+    entities.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(token.clone()))).cloned().collect()
+}
+
+fn refs_containing_tag(entities: &RefTags, token: &Token) -> RefTags {
+    let mut refs: RefTags = vec![];
+
+    for e in entities.iter() {
+        let t: Option<Token> = find_ref_with_id(&e.1, &token);
+                      
+        //  (Token, Vec<Tag>)
+        if t.is_some() {
+
+            let token: Token = t.unwrap();
+
+            println!("token: {:?}", token);
+
+            // Here we have thecorrect ref but we want to grab it from the original
+            // vec as that has all the correct tags etc  
+            println!("entities: {:?}", entities);
+
+            let ref_tag: Option<&RefTag> = entities.iter().find(|&i| i.0 == token );
+
+            println!("ref_tag: {:?}", ref_tag);
+
+            if ref_tag.is_some() {
+                refs.push(ref_tag.unwrap().clone());
+            }
+        }
+    }
+
+    refs
+}
+
+
+
+fn intersect_refs_against_ids(lhs: &RefTags, rhs: &RefTags, refs_token: &Token, ids_token: &Token) -> RefTags {
+
+    let refs: RefTags = refs_containing_tag(lhs, refs_token);
+    let ids: RefTags = ids_containing_tag(rhs, ids_token);
+
+    println!("lhs: {:?}   rhs: {:?}\n", refs_token, ids_token);
+    println!("refs: {:?}   ids: {:?}\n", refs, ids);
+
+    refs.intersect(ids)
+}
+
 pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
 {
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
@@ -260,24 +285,6 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     // We do this for fater lookup of refs with tag
     // let mut haystack_tag_name_store: HashMap<String, Vec<Token>> = HashMap::new();
     // let mut haystack_ref_name_store: HashMap<Token, HaystackTags> = HashMap::new();
-
-    //let mut manager: IdTagManager = IdTagManager::new();
-
-    //manager.update(f);
-
-    // for (id, haystack_tags) in values {
-    //     for (haystack_tag, haystack_tag_value) in haystack_tags {
-
-    //         match haystack_tag_name_store.get_mut(&haystack_tag) {
-    //             Some(vec_values) => {
-    //                 vec_values.push((haystack_tag_value, id.clone()));
-    //             },
-    //             None => {
-    //                 haystack_tag_name_store.insert(haystack_tag, vec![(haystack_tag_value, id.clone())]);
-    //             }
-    //         }
-    //     }
-    // }
 
     let values: RefTags = f();
 
@@ -313,6 +320,8 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                 let mut tag_stack = tags.clone();
 
+                //  let mut tag_stack: Vec<Token> = tags.iter().rev().cloned().collect();
+
                 // while tag_stack.len() > 0 {
                 //     let tag_name = tag_stack.pop().unwrap().clone();
                 //     println!("searching tagename: {:?}", tag_name);
@@ -327,229 +336,22 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 }
                 else if tags.len() >= 2 {
 
-                    let tag_name1 = tag_stack.pop().unwrap().clone();
-                    //let tag_name2 = tag_stack.pop().unwrap().clone();
-                    // Ok first do the last two. This is simple as we don't need to follow Refs
-                    //ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone())) && i.1.contains(&Tag::new_marker_from_token(tag_name2.clone())) ).cloned().collect();
+                    // siteRef -> equipRef -> pointRef -> let tag_name1 = tag_stack.pop().unwrap().clone();
+                  //  let tag_name2 = tag_stack.pop().unwrap().clone(); //tag_name1 = tag_stack.pop().unwrap().clone();
+                  //  let tag_name2 = tag_stack.pop().unwrap().clone();
+                    // ((siteRef, equipRef), pointRef), dis
 
-                    ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone()))).cloned().collect();
+                    for i in tag_stack.windows(2) {
 
-                    println!("ids: {:?}\n\n", ids);
+                        //
+                       ids = intersect_refs_against_ids(&values, &values, &i[0], &i[1]);
 
-                    // Now we need to make sure the previous tag results constain a Ref by with the specified tag name
-                    // That points to any items in out id vec
-                    while tag_stack.len() > 0 {
-                        let tag_name = tag_stack.pop().unwrap().clone();
-                 //       println!("searching tagename: {:?}", tag_name);
-
-                        //let refs: RefTags = values.iter().filter(|&i| contains_ref_with_id(&i.1, &tag_name) ).cloned().collect();
-
-                        let mut refs: RefTags = vec![];
-
-                        for v in values.iter() {
-                            let t: Option<Token> = find_ref_with_id(&v.1, &tag_name);
-                                                                        
-                            //  (Token, Vec<Tag>)
-                            if t.is_some() {
-
-                                let token: Token = t.unwrap();
-                                let ref_tag: Option<&RefTag> = values.iter().find(|&i| i.0 == token );
-
-                                if ref_tag.is_some() {
-                                    refs.push(ref_tag.unwrap().clone());
-                                }
-                            }
-                        }
-
-                    
-
-                        println!("refs: {:?}", refs);
-
-                        //ids = values.iter().filter(|&i| contains_ref_with_id(&i.1, &tag_name) ).cloned().collect();
-                        ids = ids.intersect(refs);
-
-                        println!("ids: {:?}\n\n", ids);
+                       println!("---- {:?} {} {}\n\n", ids, i[0], i[1]);
                     }
-                }
+               }
+         
 
                 stack.push(StackValue::Refs(ids.iter().map(|x| x.0.clone()).collect()));
-
-                /*
-                let mut all_refs: Vec<Vec<Token>> = vec![vec![]; tags.len()];
-
-                let mut count: usize = 0;
-                // All except last should be Token::Refs
-                for tag_id in &tags[0..tags.len() - 1] {
-
-                    let tag_name_option: Option<String> = match tag_id {
-                        Token::Id(id) => Some(id.to_string()),
-                        _ => None
-                    };
-
-                    let tag_name = tag_name_option.unwrap().to_string();
-
-                    // Get the refs for those items with the tag id
-                    println!("tag_name: {:?}", tag_name);
-                    let refs: Vec<Token> = manager.get_refs_containing_haystack_tag_name(&tag_name);
-                
-                    for r in refs {
-
-                        let ref_id: Option<Token> = match &r {
-                            Token::Ref(id, _) => Some(r),
-                            _ => None
-                        };
-
-                        
-
-                        // if ref_id.is_some() {
-                        //     all_refs[count].push(ref_id.unwrap());
-                        // }
-
-                        let pointed_to_ref: Option<HaystackTag> = manager.get_tag_for_ref_with_tagname(&ref_id.unwrap(), &tag_name);
-                    
-                        if pointed_to_ref.is_some() {
-
-                            let tag_value = pointed_to_ref.unwrap().1;
-                            if variant_eq(&Token::Ref("".to_string(), None), &tag_value) {
-                                all_refs[count].push(tag_value);
-                            }
-                            else {
-                                // If we are not on the last element then the tag needs to be a ref type
-                                if count < (tags.len() - 1) {
-                                     return Err(FilterError::EvalError(format!(
-                                            "specified path {} has returned not Token::Ref types",
-                                            tags[count]
-                                        )));
-                                }
-                            }
-                        }
-                    }
-
-                    println!("count: {:?}", count);
-                    count += 1;
-                }
-
-                all_refs[count] = manager.tag_id_to_refs(&tags[count]).unwrap_or(vec![]);
-
-                for r in &all_refs {
-                    println!("v: {:?}", r);
-                }
-
-                let mut intersected: Vec<Token> = vec![];
-
-                match tags.len() {
-                    0 => (),
-                    1 => {intersected = all_refs[0].clone();},
-                    2 => {intersected = all_refs[0].intersect(all_refs[1].clone());},
-                    _ => {
-                        intersected = all_refs[0].intersect(all_refs[1].clone());
-                        for i in (2..tags.len()) {
-                            intersected = intersected.intersect(all_refs[i].clone());
-                        }
-                    }
-                }
-
-
-                // if tags.len() > 2 {
-                //     intersected = all_refs[0].intersect(all_refs[1]);
-                //     for i in (2..tags.len())
-                //         intersected = intersected.intersect(all_refs[i]);
-                //     }
-                // }
-                // else if tags.len() == 2 {
-                //     intersected = all_refs[0].intersect(all_refs[1]);
-                // }
-                // else if tags.len() == 2 {
-                //     intersected = all_refs[0].intersect(all_refs[1]);
-                // }
-
-
-
-                // let mut intersected: Vec<Token> = all_refs[0].clone();
-
-                // for refs in &all_refs[1..all_refs.len() - 1] {
-                //     let mut tmp = refs.intersect(intersected);
-                //     // intersected.clear();
-                //     intersected = tmp;
-                // }
-
-                intersected.sort();
-
-                stack.push(StackValue::Refs(intersected));
-
-
-
-                // return Err(FilterError::EvalError(format!(
-                //     "There are still {} items on the stack.",
-                //     stack.len()
-                // )));
-
-
-
-                // tags = Path([Id("siteRef"), Id("elec"), Id("dis")]
-
-
-
-                // println!("{:?}", tags);
-
-                //let mut stack : Vec<StackValue> = Vec::with_capacity(16);
-
-                // let ids_for_first_tag: Option<Vec<Token>> = manager.tag_id_to_refs(&tags[0]);
-
-                // if ids_for_first_tag.is_none() {
-                //     continue 'rpn_loop;
-                // }
-
-                // let ids = ids_for_first_tag.unwrap();
-
-                // for tag_id in &tags[1..tags.len() - 1] {
-
-                //     let new_ids_option: Option<Vec<Token>> = manager.tag_id_to_refs(&tag_id);
-
-                //     if new_ids_option.is_none() {
-                //         continue 'rpn_loop;
-                //     }
-
-                //     let new_refs = filter_tokens_by_ref_type(&new_ids_option.unwrap());
-
-                //     new_refs.iter().filter(|i: &Token| ids.co)
-                 
-
-                //     let tag_option: Option<String> = match tag_id {
-                //         Token::Id(id) => Some(id.clone()),
-                //         _ => None
-                //     };
-
-                //     if tag_option.is_none() {
-                //         continue 'rpn_loop;
-                //     }
-
-                //     let tag: String = tag_option.unwrap();
-
-                //     if haystack_tag_name_store.contains_key(&tag) {
-                //         let ref_tokens: &Vec<Token> = haystack_tag_name_store.get(&tag).unwrap();
-                //     }
-                // }
-
-
-                
-
-               // last_name = Some(tag_name.to_string());
-                
-               // NameWithTags = (String, Vec<Tag>);
-               // returns  Vec<(Token, String)>
-               // stack.push(StackValue::Name((tag_name.clone(), haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()) ));
-               // stack.push(StackValue::Name(haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()));
-
-               // Return all ids with tag_name
-               //let refs = haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()
-
-               //let filtered: RefTags = right.iter().filter(|x| site_refs.contains(&x.0) ).cloned().collect();
-
-               //stack.push(StackValue::Refs(haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()));
-
-               */
-
 
             },
             FilterToken::Binary(op) => {
