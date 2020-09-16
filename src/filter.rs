@@ -17,6 +17,7 @@ use std::collections::{HashSet, HashMap};
 use crate::*;
 use crate::error::*;
 use crate::token::Token;
+use crate::token::Tag;
 
 use array_tool::vec::Intersect;
 use array_tool::uniques;
@@ -63,7 +64,7 @@ pub struct Filter {
 
 //pub type Tag = (String, Token);
 // Id, TagName, Value
-pub type RefTag = (Token, String, Token);
+pub type RefTag = (Token, Vec<Tag>);
 pub type RefTags = Vec<RefTag>;
 
 
@@ -88,6 +89,16 @@ impl fmt::Display for StackValue {
     }
 }
 
+
+
+
+fn variant_eq<T>(a: &T, b: &T) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b)
+}
+
+
+
+/*
 struct IdTagManager {
     tags_to_ref_store: HashMap<String, Vec<Token>>,
     ref_to_tags_store: HashMap<Token, HaystackTags>,
@@ -175,6 +186,7 @@ impl IdTagManager {
         None
     }
 }
+*/
 
 fn filter_tokens_by_ref_type(v: &Vec<Token>) -> Vec<Token> {
     fn match_refs(token: &Token) -> Option<Token> {
@@ -187,6 +199,59 @@ fn filter_tokens_by_ref_type(v: &Vec<Token>) -> Vec<Token> {
     v.iter().flat_map(|t| match_refs(t) ).collect()
 }
 
+// pub fn contains_ref_with_id_and_value(v: &Vec<Tag>, id_token: &Token, value: &str) -> bool
+// {
+//     // let id_str_option = match id_token {
+//     //     Token::Id(id) => Some(id.clone()),
+//     //     _ => None
+//     // };
+
+//     // if id_str_option.is_none() {
+//     //     return false;
+//     // }
+
+//     // let id = id_str_option.unwrap();
+    
+//     print!("here: {:?}", id_token);
+
+//     let result = v.iter().filter(|&t| t.contains_ref_with_id_and_value(id_token, value)).peekable().peek().is_some();
+
+//     println!("  result: {:?}", result);
+
+//     result
+// }
+
+pub fn contains_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> bool
+{
+  //  print!("here: {:?}", id_token);
+
+    let result = v.iter().filter(|&t| t.contains_ref_with_id(id_token)).peekable().peek().is_some();
+
+  //  println!("  result: {:?}", result);
+
+    result
+}
+
+pub fn find_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> Option<Token>
+{
+  //  print!("here: {:?}", id_token);
+
+    let result_option: Option<&Tag> = v.iter().find(|t| t.contains_ref_with_id(id_token));
+
+    if result_option.is_none() {
+        return None;
+    }
+
+    let result: &Tag = result_option.unwrap();
+
+    let token_value: Option<Token> = result.get_value::<Token>();
+
+ //   println!("  token_value: {:?}", token_value);
+
+    token_value
+}
+
+
 pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
 {
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
@@ -196,9 +261,9 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     // let mut haystack_tag_name_store: HashMap<String, Vec<Token>> = HashMap::new();
     // let mut haystack_ref_name_store: HashMap<Token, HaystackTags> = HashMap::new();
 
-    let mut manager: IdTagManager = IdTagManager::new();
+    //let mut manager: IdTagManager = IdTagManager::new();
 
-    manager.update(f);
+    //manager.update(f);
 
     // for (id, haystack_tags) in values {
     //     for (haystack_tag, haystack_tag_value) in haystack_tags {
@@ -214,16 +279,18 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     //     }
     // }
 
+    let values: RefTags = f();
+
     let tokens = tokenize(expr)?;
     let rpn = to_rpn(&tokens)?;
 
-    println!("\n\nrpn: {:?}", rpn);
+ //   println!("\n\nrpn: {:?}", rpn);
 
     //let mut last_name: Option<String> = None;
 
     'rpn_loop: for token in &rpn {
 
-        println!("\nToken: {:?}", token);
+     //   println!("\nToken: {:?}", token);
 
         match *token {
             FilterToken::Val(ref n) => {
@@ -239,6 +306,75 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 // Get all items with tag equipRef which points to items with tag siteRef which point to items with dis tag
                 // Get all tags with tag siteRef which point to ids with tag geoCity
 
+                let mut ids: RefTags = values.clone();
+
+                // value of type `std::vec::Vec<(token::Token, std::vec::Vec<token::Tag>)>` 
+                // cannot be built from `std::iter::Iterator<Item=&(token::Token, std::vec::Vec<token::Tag>)>`
+
+                let mut tag_stack = tags.clone();
+
+                // while tag_stack.len() > 0 {
+                //     let tag_name = tag_stack.pop().unwrap().clone();
+                //     println!("searching tagename: {:?}", tag_name);
+                //     ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name.clone())) ).cloned().collect();
+                //     println!("ids: {:?}\n\n", ids);
+                // }
+
+//// assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!()));
+                if tags.len() == 1 {
+                    let tag_name1 = tag_stack.pop().unwrap().clone();
+                    ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone()))).cloned().collect();
+                }
+                else if tags.len() >= 2 {
+
+                    let tag_name1 = tag_stack.pop().unwrap().clone();
+                    //let tag_name2 = tag_stack.pop().unwrap().clone();
+                    // Ok first do the last two. This is simple as we don't need to follow Refs
+                    //ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone())) && i.1.contains(&Tag::new_marker_from_token(tag_name2.clone())) ).cloned().collect();
+
+                    ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone()))).cloned().collect();
+
+                    println!("ids: {:?}\n\n", ids);
+
+                    // Now we need to make sure the previous tag results constain a Ref by with the specified tag name
+                    // That points to any items in out id vec
+                    while tag_stack.len() > 0 {
+                        let tag_name = tag_stack.pop().unwrap().clone();
+                 //       println!("searching tagename: {:?}", tag_name);
+
+                        //let refs: RefTags = values.iter().filter(|&i| contains_ref_with_id(&i.1, &tag_name) ).cloned().collect();
+
+                        let mut refs: RefTags = vec![];
+
+                        for v in values.iter() {
+                            let t: Option<Token> = find_ref_with_id(&v.1, &tag_name);
+                                                                        
+                            //  (Token, Vec<Tag>)
+                            if t.is_some() {
+
+                                let token: Token = t.unwrap();
+                                let ref_tag: Option<&RefTag> = values.iter().find(|&i| i.0 == token );
+
+                                if ref_tag.is_some() {
+                                    refs.push(ref_tag.unwrap().clone());
+                                }
+                            }
+                        }
+
+                    
+
+                        println!("refs: {:?}", refs);
+
+                        //ids = values.iter().filter(|&i| contains_ref_with_id(&i.1, &tag_name) ).cloned().collect();
+                        ids = ids.intersect(refs);
+
+                        println!("ids: {:?}\n\n", ids);
+                    }
+                }
+
+                stack.push(StackValue::Refs(ids.iter().map(|x| x.0.clone()).collect()));
+
+                /*
                 let mut all_refs: Vec<Vec<Token>> = vec![vec![]; tags.len()];
 
                 let mut count: usize = 0;
@@ -273,7 +409,19 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     
                         if pointed_to_ref.is_some() {
 
-                            all_refs[count].push(pointed_to_ref.unwrap().1);
+                            let tag_value = pointed_to_ref.unwrap().1;
+                            if variant_eq(&Token::Ref("".to_string(), None), &tag_value) {
+                                all_refs[count].push(tag_value);
+                            }
+                            else {
+                                // If we are not on the last element then the tag needs to be a ref type
+                                if count < (tags.len() - 1) {
+                                     return Err(FilterError::EvalError(format!(
+                                            "specified path {} has returned not Token::Ref types",
+                                            tags[count]
+                                        )));
+                                }
+                            }
                         }
                     }
 
@@ -287,19 +435,60 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     println!("v: {:?}", r);
                 }
 
-                let mut intersected: Vec<Token> = all_refs[0].clone();
+                let mut intersected: Vec<Token> = vec![];
 
-                for refs in &all_refs[1..all_refs.len() - 1] {
-                    let mut tmp = refs.intersect(intersected);
-                    // intersected.clear();
-                    intersected = tmp;
+                match tags.len() {
+                    0 => (),
+                    1 => {intersected = all_refs[0].clone();},
+                    2 => {intersected = all_refs[0].intersect(all_refs[1].clone());},
+                    _ => {
+                        intersected = all_refs[0].intersect(all_refs[1].clone());
+                        for i in (2..tags.len()) {
+                            intersected = intersected.intersect(all_refs[i].clone());
+                        }
+                    }
                 }
+
+
+                // if tags.len() > 2 {
+                //     intersected = all_refs[0].intersect(all_refs[1]);
+                //     for i in (2..tags.len())
+                //         intersected = intersected.intersect(all_refs[i]);
+                //     }
+                // }
+                // else if tags.len() == 2 {
+                //     intersected = all_refs[0].intersect(all_refs[1]);
+                // }
+                // else if tags.len() == 2 {
+                //     intersected = all_refs[0].intersect(all_refs[1]);
+                // }
+
+
+
+                // let mut intersected: Vec<Token> = all_refs[0].clone();
+
+                // for refs in &all_refs[1..all_refs.len() - 1] {
+                //     let mut tmp = refs.intersect(intersected);
+                //     // intersected.clear();
+                //     intersected = tmp;
+                // }
 
                 intersected.sort();
 
                 stack.push(StackValue::Refs(intersected));
 
+
+
+                // return Err(FilterError::EvalError(format!(
+                //     "There are still {} items on the stack.",
+                //     stack.len()
+                // )));
+
+
+
                 // tags = Path([Id("siteRef"), Id("elec"), Id("dis")]
+
+
 
                 // println!("{:?}", tags);
 
@@ -358,6 +547,10 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                //let filtered: RefTags = right.iter().filter(|x| site_refs.contains(&x.0) ).cloned().collect();
 
                //stack.push(StackValue::Refs(haystack_tag_name_store.get(tag_name).unwrap_or(&vec![]).clone()));
+
+               */
+
+
             },
             FilterToken::Binary(op) => {
 
@@ -750,6 +943,18 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 mod tests {
     use super::*;
 
+    macro_rules! refs {
+        ( $( $x:expr ),* ) => {
+            {
+                let mut temp_vec = Vec::new();
+                $(
+                    temp_vec.push(Token::Ref($x.to_string(), None));
+                )*
+                StackValue::Refs(temp_vec)
+            }
+        };
+    }
+
     #[test]
     fn test_eval() {
 
@@ -759,34 +964,43 @@ mod tests {
         // In the real world the idea is to get all the refs with tags from a db or whatever.
         // Maybe inefficient but will do for now.
         fn get_tags() -> RefTags {
+
             vec![
-                (Token::Ref("@1".to_string(), None), "dis".to_string(), Token::EscapedString("One".to_string())),
-                (Token::Ref("@1".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),
-                (Token::Ref("@1".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),
-                (Token::Ref("@1".to_string(), None), "water".to_string(), Token::EscapedString("water".to_string())),
-                (Token::Ref("@1".to_string(), None), "geoCity".to_string(), Token::EscapedString("Chicago".to_string())),
 
-                (Token::Ref("@2".to_string(), None), "dis".to_string(), Token::EscapedString("Two".to_string())),
-                
-                (Token::Ref("@3".to_string(), None), "dis".to_string(), Token::EscapedString("Three".to_string())),
-                (Token::Ref("@3".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),   
-                (Token::Ref("@3".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),  
-                (Token::Ref("@3".to_string(), None), "siteRef".to_string(), Token::Ref("@1".to_string(), None)),       
-                
-                (Token::Ref("@4".to_string(), None), "dis".to_string(), Token::EscapedString("Four".to_string())),
-                (Token::Ref("@4".to_string(), None), "heat".to_string(), Token::EscapedString("Four".to_string())),  
-                (Token::Ref("@4".to_string(), None), "geoCity".to_string(), Token::EscapedString("London".to_string())),
+                (Token::Ref("@1".to_string(), None), vec![Tag::new_string("dis", "One"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_string("water", "water"), Tag::new_string("geoCity", "geoCity")]),
 
-                (Token::Ref("@5".to_string(), None), "dis".to_string(), Token::EscapedString("Five".to_string())),
-                (Token::Ref("@5".to_string(), None), "heat".to_string(), Token::EscapedString("heat".to_string())),   
-                (Token::Ref("@5".to_string(), None), "elec".to_string(), Token::EscapedString("elec".to_string())),  
-                (Token::Ref("@5".to_string(), None), "water".to_string(), Token::EscapedString("water".to_string())),   
-                (Token::Ref("@5".to_string(), None), "siteRef".to_string(), Token::Ref("@2".to_string(), None)),         
-                
+                (Token::Ref("@2".to_string(), None), vec![Tag::new_string("dis", "Two")]),
+
+                (Token::Ref("@3".to_string(), None), vec![Tag::new_string("dis", "Three"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_ref("siteRef", "@1")]),
+
+                (Token::Ref("@4".to_string(), None), vec![Tag::new_string("dis", "Four"), Tag::new_string("heat", "heat"), Tag::new_string("geoCity", "London"),
+                                                          Tag::new_ref("equipRef", "@7")]),
+
+                (Token::Ref("@5".to_string(), None), vec![Tag::new_string("dis", "Five"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_string("water", "water"), Tag::new_ref("siteRef", "@2")]),
+
+                (Token::Ref("@6".to_string(), None), vec![Tag::new_string("dis", "Six"), Tag::new_ref("siteRef", "@4")]),
+            
+                (Token::Ref("@7".to_string(), None), vec![Tag::new_string("dis", "Seven")])
+             
             ]
         }
 
-        println!("{:?}", filter_eval_str("siteRef->elec->dis", &get_tags));
+    
+        // assert_eq!(filter_eval_str("siteRef", &get_tags), Ok(refs!("@3", "@5", "@6")));
+        // assert_eq!(filter_eval_str("siteRef->dis", &get_tags), Ok(refs!("@1", "@2", "@4")));
+        // assert_eq!(filter_eval_str("siteRef->heat", &get_tags), Ok(refs!("@1", "@4")));
+        // assert_eq!(filter_eval_str("siteRef->elec->dis", &get_tags), Ok(refs!()));
+        // assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!()));
+      
+        //
+        //
+        // Entity has siteRef Tag that points to entity With equipRef which points to entity with dis tag
+        // @6  -> @4 -> @7  // Should be 6
+        println!("{:?}", filter_eval_str("siteRef->equipRef->dis", &get_tags));
+
         // println!("{:?}", filter_eval_str("elec and heat", &get_tags));
         // println!("{:?}", filter_eval_str("elec or heat", &get_tags));
         // println!("{:?}", filter_eval_str("not elec", &get_tags));

@@ -514,7 +514,7 @@ fn zinc_tag<'a>(i: &'a str) -> IResult<&'a str, Tag, (&'a str, ErrorKind)> {
         alt((zinc_tag_pair, zinc_marker_tag)),
         |t: (Token, Option<Val>)| {
             //Token::Tag(Box::new(t.0), Box::new(t.1))
-            Tag::new(t.0, t.1)
+            Tag::new_from_val(t.0, t.1)
         },
     )(i)
 }

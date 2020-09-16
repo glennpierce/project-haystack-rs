@@ -393,13 +393,56 @@ impl HVal for Comma {
 
 // ///////////////////////////////////
 
+fn variant_eq<T>(a: &T, b: &T) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b)
+}
+
 pub struct Tag {
     pub ident: Token,
     pub value: Option<Val>
 }
 
 impl Tag {
-    pub fn new(ident: Token, value: Option<Val>) -> Self {
+    pub fn new(id: &str, value: Option<Val>) -> Self {
+
+        Tag {
+            ident: Token::Id(id.to_string()),
+            value: value.clone(),
+        }
+    }
+
+    pub fn new_marker(id: &str) -> Self {
+
+        Tag {
+            ident: Token::Id(id.to_string()),
+            value: None,
+        }
+    }
+
+    pub fn new_marker_from_token(ident: Token) -> Self {
+
+        match &ident {
+            Token::Id(_id) => (),
+            _ => assert!(true),
+        };
+
+        Tag {
+            ident: ident,
+            value: None,
+        }
+    }
+
+    pub fn new_string(id: &str, value: &str) -> Self {
+
+        Tag::new_from_token(Token::Id(id.to_string()), Token::EscapedString(value.to_string()))
+    }
+
+    pub fn new_ref(id: &str, value: &str) -> Self {
+
+        Tag::new_from_token(Token::Id(id.to_string()), Token::Ref(value.to_string(), None))
+    }
+
+    pub fn new_from_val(ident: Token, value: Option<Val>) -> Self {
 
         match &ident {
             Token::Id(_id) => (),
@@ -408,7 +451,7 @@ impl Tag {
 
         Tag {
             ident: ident.clone(),
-            value: value.clone(),
+            value: value,
         }
     }
 
@@ -447,6 +490,72 @@ impl Tag {
 
         self.value.clone().unwrap().cast_to_type()
     }
+
+    pub fn contains_ref_with_id(&self, id: &Token) -> bool
+    {
+        if !variant_eq(id, &Token::Id("".to_string())) {
+            return false;
+        }
+
+        if id != &self.ident {
+            return false;
+        }
+
+        let v = self.value.clone().unwrap();
+
+        let token_option = v.cast_to_type::<Token>();
+
+        if token_option.is_none() {
+            return false;
+        }
+
+        let token: Token = token_option.unwrap();
+
+        match &token {
+           
+            Token::Ref(_, _) => true,
+            _ => false
+        }
+    }
+
+    pub fn contains_ref_with_id_and_value(&self, id: &Token, value: &str) -> bool
+    {
+        if !variant_eq(id, &Token::Id("".to_string())) {
+            return false;
+        }
+
+        if id != &self.ident {
+            return false;
+        }
+
+        if self.value.is_none() {
+            return false;
+        }
+
+        let v = self.value.clone().unwrap();
+
+        let token_option = v.cast_to_type::<Token>();
+
+        if token_option.is_none() {
+            return false;
+        }
+
+        let token: Token = token_option.unwrap();
+
+        match &token {
+           
+            Token::Ref(val, display) => {
+                
+                if val == value {
+                    return true;
+                }
+
+                false
+            },
+
+            _ => false
+        }
+    }
 }
 
 impl PartialEq for Tag {
@@ -484,7 +593,7 @@ impl fmt::Display for Tag {
 impl HVal for Tag {
 
     fn clone_dyn(&self) -> Box<dyn HVal> {
-        Box::new(Tag::new(self.ident.clone(), self.value.clone())) as Box<dyn HVal>
+        Box::new(Tag::new_from_val(self.ident.clone(), self.value.clone())) as Box<dyn HVal>
     }
 
     fn type_name(&self) -> String {
