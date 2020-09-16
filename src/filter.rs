@@ -230,6 +230,20 @@ pub fn find_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> Option<Token>
 }
 
 
+fn filter_entities_by_token_name(entities: &RefTags, id: &Token) -> RefTags {
+    entities.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(id.clone()))).cloned().collect()
+}
+
+fn intersect_tags(v1: &Vec<Tag>, v2: &Vec<Tag>) -> bool {
+    !v1.intersect(v2.clone()).is_empty()
+}
+
+fn filter_entities_by_possible_value_tokens(entities: &RefTags, tags: &Vec<Tag>) -> RefTags {
+
+    //entities.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(id.clone()))).cloned().collect()
+    entities.iter().filter(|&i| intersect_tags(&i.1, tags)).cloned().collect()
+}
+
 fn ids_containing_tag(entities: &RefTags, token: &Token) -> RefTags {
     entities.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(token.clone()))).cloned().collect()
 }
@@ -266,16 +280,27 @@ fn refs_containing_tag(entities: &RefTags, token: &Token) -> RefTags {
 
 
 
-fn intersect_refs_against_ids(lhs: &RefTags, rhs: &RefTags, refs_token: &Token, ids_token: &Token) -> RefTags {
+// fn intersect_refs_against_ids(lhs: &RefTags, rhs: &RefTags, refs_token: &Token, ids_token: &Token) -> RefTags {
 
-    let refs: RefTags = refs_containing_tag(lhs, refs_token);
-    let ids: RefTags = ids_containing_tag(rhs, ids_token);
+//     let refs: RefTags = refs_containing_tag(lhs, refs_token);
+//     let ids: RefTags = ids_containing_tag(rhs, ids_token);
 
-    println!("lhs: {:?}   rhs: {:?}\n", refs_token, ids_token);
-    println!("refs: {:?}   ids: {:?}\n", refs, ids);
+//     println!("lhs: {:?}   rhs: {:?}\n", refs_token, ids_token);
+//     println!("refs: {:?}   ids: {:?}\n", refs, ids);
 
-    refs.intersect(ids)
-}
+//     refs.intersect(ids)
+// }
+
+// fn get_refs(entities: &RefTags, refs_token: &Token, ids_token: &Token) -> RefTags {
+
+//     let refs: RefTags = refs_containing_tag(lhs, refs_token);
+//     let ids: RefTags = ids_containing_tag(rhs, ids_token);
+
+//     println!("lhs: {:?}   rhs: {:?}\n", refs_token, ids_token);
+//     println!("refs: {:?}   ids: {:?}\n", refs, ids);
+
+//     refs.intersect(ids)
+// }
 
 pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
 {
@@ -314,13 +339,14 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 // Get all tags with tag siteRef which point to ids with tag geoCity
 
                 let mut ids: RefTags = values.clone();
+                let mut refs: RefTags = values.clone();
 
                 // value of type `std::vec::Vec<(token::Token, std::vec::Vec<token::Tag>)>` 
                 // cannot be built from `std::iter::Iterator<Item=&(token::Token, std::vec::Vec<token::Tag>)>`
 
-                let mut tag_stack = tags.clone();
+                //let mut tag_stack = tags.clone();
 
-                //  let mut tag_stack: Vec<Token> = tags.iter().rev().cloned().collect();
+                let mut tag_stack: Vec<Token> = tags.iter().rev().cloned().collect();
 
                 // while tag_stack.len() > 0 {
                 //     let tag_name = tag_stack.pop().unwrap().clone();
@@ -329,29 +355,77 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 //     println!("ids: {:?}\n\n", ids);
                 // }
 
-//// assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!()));
-                if tags.len() == 1 {
-                    let tag_name1 = tag_stack.pop().unwrap().clone();
-                    ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone()))).cloned().collect();
+                // siteRef->equipRef->dis
+
+                let tag_name = tag_stack.pop().unwrap().clone();
+
+                println!("tag_name: {:?}", tag_name);
+
+                ids = filter_entities_by_token_name(&ids, &tag_name);
+
+                println!("ids: {:?}", ids);
+
+                while tag_stack.len() > 0 {
+
+                    
+
+                    let tag_name = tag_stack.pop().unwrap().clone();
+
+                    println!("tag_name: {:?}", tag_name);
+
+                    let possible_tags: Vec<Tag> = ids.iter().flat_map(|x| {
+                        match &x.0 {
+                            Token::Ref(id, _) => Some(Tag::new_ref_from_token(&tag_name, &id)),
+                            _ => None
+                        }
+                    }).collect();
+
+                    println!("possible_tags: {:?}\n\n", possible_tags);
+
+                    ids = filter_entities_by_possible_value_tokens(&ids, &possible_tags);
+                    println!("filtered by poss ids: {:?}\n", ids);
+
+                    // //ids = filter_entities_by_token(&ids, &tag_name, value: &Token);
+
+                    // //println!("searching tagname: {:?}", tag_name);
+                    // ids = ids_containing_tag(&ids, &tag_name);
+                    
+                    // refs = refs_containing_tag(&ids, &tag_name);
+
+                   
+                    // ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name.clone())) ).cloned().collect();
+                    // println!("ids: {:?}\n\n", ids);
                 }
-                else if tags.len() >= 2 {
 
-                    // siteRef -> equipRef -> pointRef -> let tag_name1 = tag_stack.pop().unwrap().clone();
-                  //  let tag_name2 = tag_stack.pop().unwrap().clone(); //tag_name1 = tag_stack.pop().unwrap().clone();
-                  //  let tag_name2 = tag_stack.pop().unwrap().clone();
-                    // ((siteRef, equipRef), pointRef), dis
+                
+//                 let ids: RefTags = ids_containing_tag(rhs, ids_token);
+            
 
-                    for i in tag_stack.windows(2) {
+// //// assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!()));
+//                 if tags.len() == 1 {
+//                     let tag_name1 = tag_stack.pop().unwrap().clone();
+//                     ids = ids.iter().filter(|&i| i.1.contains(&Tag::new_marker_from_token(tag_name1.clone()))).cloned().collect();
+//                 }
+//                 else if tags.len() >= 2 {
 
-                        //
-                       ids = intersect_refs_against_ids(&values, &values, &i[0], &i[1]);
+//                     // siteRef -> equipRef -> pointRef -> let tag_name1 = tag_stack.pop().unwrap().clone();
+//                   //  let tag_name2 = tag_stack.pop().unwrap().clone(); //tag_name1 = tag_stack.pop().unwrap().clone();
+//                   //  let tag_name2 = tag_stack.pop().unwrap().clone();
+//                     // ((siteRef, equipRef), pointRef), dis
 
-                       println!("---- {:?} {} {}\n\n", ids, i[0], i[1]);
-                    }
-               }
+//                     //dis , equiprRef, SiteRef
+
+//                     for i in tag_stack.windows(2) {
+
+//                         //
+//                        ids = intersect_refs_against_ids(&values, &values, &i[1], &i[0]);
+
+//                        println!("---- {:?} {} {}\n\n", ids, i[0], i[1]);
+//                     }
+//                }
          
 
-                stack.push(StackValue::Refs(ids.iter().map(|x| x.0.clone()).collect()));
+//                 stack.push(StackValue::Refs(ids.iter().map(|x| x.0.clone()).collect()));
 
             },
             FilterToken::Binary(op) => {
@@ -810,10 +884,5 @@ mod tests {
         // println!("{:?}", filter_eval_str("not elec and heat", &get_tags));
         // println!("{:?}", filter_eval_str("elec and siteRef->geoCity", &get_tags));
         // println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
-    }
-
-    #[test]
-    fn test_builtins() {
-       // assert_eq!(filter_eval_str("atan2(1.,2.)"), Ok(StackValue::Value((1f64).atan2(2.))));
     }
 }

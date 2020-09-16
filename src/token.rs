@@ -437,6 +437,11 @@ impl Tag {
         Tag::new_from_token(Token::Id(id.to_string()), Token::EscapedString(value.to_string()))
     }
 
+    pub fn new_ref_from_token(id: &Token, value: &str) -> Self {
+
+        Tag::new_from_token(id.clone(), Token::Ref(value.to_string(), None))
+    }
+
     pub fn new_ref(id: &str, value: &str) -> Self {
 
         Tag::new_from_token(Token::Id(id.to_string()), Token::Ref(value.to_string(), None))
