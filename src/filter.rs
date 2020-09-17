@@ -149,6 +149,18 @@ fn get_routes_for_path(values: &RefTags, tags: &Vec<Token>) -> Vec<Vec<(Token, O
     routes
 }
 
+fn traverse_up_routes_removing_paths(original_routes: &Vec<Vec<(Token, Option<Token>)>>) -> Vec<Vec<(Token, Option<Token>)>> {
+
+    let mut routes = original_routes.clone();
+  
+    for index in (1..routes.len()).rev() {
+        let ids_in_route: Vec<Token> = original_routes[index].iter().map(|i| i.0.clone()).collect();
+        routes[index-1] = original_routes[index-1].clone().into_iter().filter(|x| ids_in_route.contains(&x.1.clone().unwrap())).collect();
+    }
+
+    routes
+}
+
 pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
 {
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
@@ -182,6 +194,8 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                 let routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
 
+                // println!("routes: {:?}", routes);
+
                 // ok we need to turn this into head/tail Path for the stack now
                 // stack.push(StackValue::Path((routes[0].iter().map(|x|x.0.clone()).collect(),
                 //                              routes[tags.len()-1].iter().map(|x|x.0.clone()).collect())));
@@ -213,7 +227,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     _ => {
                         return Err(FilterError::EvalError("Unexpected type".to_string()));
                     }
-            }
+                }
 
                 println!("Compare {:?} {:?} {:?}", path, op, val);
             },
@@ -332,6 +346,14 @@ mod tests {
         };
     }
 
+    macro_rules! token_ref {
+        ( $x:expr ) => {
+            {
+                Token::Ref($x.to_string(), None)
+            }
+        };
+    }
+
     #[test]
     fn test_eval() {
 
@@ -395,6 +417,33 @@ mod tests {
         assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
         assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
 
-        println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
+        let routes = vec![
+                        vec![(token_ref!("@3"), Some(token_ref!("@1"))),
+                             (token_ref!("@6"), Some(token_ref!("@4"))),
+                             (token_ref!("@10"), Some(token_ref!("@11")))],
+                        vec![(token_ref!("@1"), Some(token_ref!("@2"))),
+                             (token_ref!("@4"), Some(token_ref!("@7"))),
+                             (token_ref!("@11"), Some(token_ref!("@7")))],
+                        vec![(token_ref!("@2"), Some(token_ref!("@9"))),
+                             (token_ref!("@7"), Some(token_ref!("@8")))],
+                        vec![(token_ref!("@1"), None),
+                             (token_ref!("@2"), None),
+                             (token_ref!("@3"), None),
+                             (token_ref!("@4"), None),
+                             (token_ref!("@5"), None),
+                             (token_ref!("@6"), None),
+                             (token_ref!("@7"), None),
+                             (token_ref!("@8"), None),
+                             (token_ref!("@9"), None),
+                             (token_ref!("@10"), None),
+                             (token_ref!("@11"), None)]];
+
+        
+        // let route1 = vec![(Token::Ref("@1".to_string(), None), Token::Ref("@11".to_string(), None))];
+
+        println!("{:?}",  traverse_up_routes_removing_paths(&routes));
+
+
+     //   println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
     }
 }
