@@ -194,6 +194,8 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                     FilterToken::Path(ref tags) => { 
 
+                        println!("tags: {:?}", tags);
+
                         let routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
 
                         match op {
@@ -381,7 +383,6 @@ mod tests {
 
         assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
 
-  
         // Entity has siteRef Tag that points to entity With equipRef which points to entity with dis tag
         assert_eq!(filter_eval_str("siteRef->equipRef->pointRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
         
@@ -393,7 +394,6 @@ mod tests {
         assert_eq!(filter_eval_str("not elec and water", &get_tags), Ok(refs!()));
         assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
         assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
-
 
         println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
     }
