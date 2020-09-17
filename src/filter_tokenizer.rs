@@ -227,7 +227,7 @@ pub enum Operation {
     Or,
     And,
     Not,
-    Has,
+    // Has,
     Equals,
     NotEquals,
     LessThan,
