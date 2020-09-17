@@ -1,10 +1,3 @@
-use std::{f64::consts, iter::Zip, slice::Iter};
-use std::ops::Deref;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::str::FromStr;
-use std::pin::Pin;
-use std::future::Future;
 
 use crate::filter_shunting_yard::to_rpn;
 use std;
@@ -24,7 +17,6 @@ use array_tool::uniques;
 
 use itertools::{Itertools, EitherOrBoth};
 use itertools::EitherOrBoth::{Both, Left, Right};
-
 
 type ContextHashMap<K, V> = HashMap<K, V>;
 
@@ -51,8 +43,6 @@ pub struct Filter {
     rpn: Vec<FilterToken>,
 }
 
-//pub type Tag = (String, Token);
-// Id, TagName, Value
 pub type RefTag = (Token, Vec<Tag>);
 pub type RefTags = Vec<RefTag>;
 
@@ -62,15 +52,16 @@ pub type HaystackTags = Vec<HaystackTag>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StackValue {
     Token(Token),
-    Path((Vec<Token>, Vec<Token>))      // head, tails
+    // Path((Vec<Token>, Vec<Token>))      // head, tails
+    Refs(Vec<Token>)     
 }
 
 impl fmt::Display for StackValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             StackValue::Token(v) => write!(f, "{}", v),
-            StackValue::Path(v) => write!(f, "{:?}", v)
-            }
+            StackValue::Refs(v) => write!(f, "{:?}", v)
+        }
     }
 }
 
@@ -118,16 +109,44 @@ fn refs_containing_tag(entities: &RefTags, token: &Token) ->  Vec<Token> {
         let t: Option<Token> = find_ref_with_id(&e.1, &token);
                       
         if t.is_some() {
-
-            //let tmp = t.unwrap();
-
-            //let 
-
             refs.push(t.unwrap().clone());
         }
     }
 
     refs
+}
+
+fn get_routes_for_path(values: &RefTags, tags: &Vec<Token>) -> Vec<Vec<(Token, Option<Token>)>> {
+
+    let mut routes: Vec<Vec<(Token, Option<Token>)>> = vec![vec![]; tags.len()];
+
+    for (index, tag) in tags.iter().enumerate() {
+
+        let ids: Vec<Token> = ids_containing_tag(&values, tag);
+        let refs: Vec<Option<Token>> = refs_containing_tag(&values, tag).iter().map(|x| Some(x.clone())).collect();
+
+        let tmp: Vec<(Token, Option<Token>)>;
+        
+        let len_ids = ids.len();
+
+        if refs.is_empty() {
+            tmp = ids.into_iter().zip(vec![None; len_ids].into_iter()).collect();
+        }
+        else {
+            tmp = ids.into_iter().zip(refs.into_iter()).collect();
+        }
+
+        if index > 0 {
+
+            // Remove dead ends from previous route
+            let current_ids: Vec<Token> = tmp.iter().map(|i| i.0.clone()).collect();
+            routes[index-1] = routes[index-1].clone().into_iter().filter(|x| current_ids.contains(&x.1.clone().unwrap())).collect();
+        }
+
+        routes[index] = tmp;
+    }
+
+    routes
 }
 
 pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
@@ -144,15 +163,10 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     let tokens = tokenize(expr)?;
     let rpn = to_rpn(&tokens)?;
 
- //   println!("\n\nrpn: {:?}", rpn);
-
-    //let mut last_name: Option<String> = None;
-
     'rpn_loop: for token in &rpn {
 
-     //   println!("\nToken: {:?}", token);
+        match token {
 
-        match *token {
             FilterToken::Val(ref n) => {
                 stack.push(StackValue::Token(n.clone()));
             },
@@ -166,87 +180,67 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                 // Get all items with tag equipRef which points to items with tag siteRef which point to items with dis tag
                 // Get all tags with tag siteRef which point to ids with tag geoCity
 
-                let mut routes: Vec<Vec<(Token, Option<Token>)>> = vec![vec![]; tags.len()];
+                let routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
 
-                for (index, tag) in tags.iter().enumerate() {
-
-                    let ids: Vec<Token> = ids_containing_tag(&values, tag);
-                    let refs: Vec<Option<Token>> = refs_containing_tag(&values, tag).iter().map(|x| Some(x.clone())).collect();
-
-                    let tmp: Vec<(Token, Option<Token>)>;
-                    
-                    let len_ids = ids.len();
-
-                    if refs.is_empty() {
-                        tmp = ids.into_iter().zip(vec![None; len_ids].into_iter()).collect();
-                        //break;
-                    }
-                    else {
-                        tmp = ids.into_iter().zip(refs.into_iter()).collect();
-                    }
-      
-                    if index > 0 {
-         
-                        // Remove dead ends from previous route
-                        let current_ids: Vec<Token> = tmp.iter().map(|i| i.0.clone()).collect();
-                //        println!("current_ids: {:?}", current_ids);
-                        routes[index-1] = routes[index-1].clone().into_iter().filter(|x| current_ids.contains(&x.1.clone().unwrap())).collect();
-                //        println!("filtered: {:?}", routes[index-1]);
-                    }
-
-               //     println!("assigning: route[{}] = {:?}", index, tmp);
-                    routes[index] = tmp;
-                }
-             
-              //  println!("routes: {:?}", routes);
-           
                 // ok we need to turn this into head/tail Path for the stack now
-                stack.push(StackValue::Path((routes[0].iter().map(|x|x.0.clone()).collect(),
-                                             routes[tags.len()-1].iter().map(|x|x.0.clone()).collect())));
+                // stack.push(StackValue::Path((routes[0].iter().map(|x|x.0.clone()).collect(),
+                //                              routes[tags.len()-1].iter().map(|x|x.0.clone()).collect())));
 
-         
-//                 stack.push(StackValue::Refs(ids.iter().map(|x| x.0.clone()).collect()));
+                stack.push(StackValue::Refs(routes[0].iter().map(|x|x.0.clone()).collect()));
+            },
+            FilterToken::Compare(path, op, val) => {
 
+                match **path {
+
+                    FilterToken::Path(ref tags) => { 
+
+                        let routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
+
+                        match op {
+                            Operation::Equals => {
+                                // Check the leaf tokens for the comparison first.
+                                // Then go up each level of routes removing possible routes to now missing leafs
+
+                                println!("leafs: {:?}", routes[routes.len() - 1]);
+                            },
+                            _ => {
+                                return Err(FilterError::EvalError("Unexpected comparison operation".to_string()));
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(FilterError::EvalError("Unexpected type".to_string()));
+                    }
+            }
+
+                println!("Compare {:?} {:?} {:?}", path, op, val);
             },
             FilterToken::Binary(op) => {
-
-                /*
-
-                println!("Binary op: Stack = {:?}", stack);
 
                 let right_stack_value: StackValue = stack.pop().unwrap();
                 let left_stack_value: StackValue = stack.pop().unwrap();
                 
-                // let right_stack_tags: Vec<String> = haystack_ref_name_store.get()
-
                 match (left_stack_value.clone(), right_stack_value.clone()) {
 
-                    (StackValue::Refs(left), StackValue::Refs(right)) => {
-                        let r = match op {
+                    // (StackValue::Path((lhs_head, lhs_tail)), StackValue::Path((rhs_head, rhs_tail))) => {
+                    (StackValue::Refs(lhs), StackValue::Refs(rhs)) => {
+                        let r: StackValue = match op {
                             Operation::And => {
 
-                                println!("AND left: {:?}", left);
-                                println!("AND right: {:?}", right);
-
-                                let mut v = left.intersect_if(right, |l, r| l == r);
-
-                                v.sort();
-
-                                v
+                               let mut v = lhs.intersect_if(rhs, |l, r| l == r);
+                               v.sort();
+                               StackValue::Refs(v)
                             },
                             Operation::Or => {
 
-                                // println!("left: {:?}", left);
-                                // println!("right: {:?}", right);
-
-                                let mut merged = left.clone();
-                                merged.extend(right);
+                                let mut merged = lhs.clone();
+                                merged.extend(rhs);
 
                                 let hs = merged.iter().cloned().collect::<HashSet<Token>>();
 
                                 let mut v: Vec<Token> = hs.into_iter().collect();
                                 v.sort();
-                                v
+                                StackValue::Refs(v)
                             },
 
                             _ => {
@@ -257,7 +251,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             }
                         };
 
-                        stack.push(StackValue::Refs(r));
+                        stack.push(r);
                     },
 
                     _ => {
@@ -265,25 +259,21 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     }
        
                  };
-
-                 */
-
             }
             FilterToken::Unary(op) => {
-
-    
-                /*
 
                 let x_stack_value: StackValue = stack.pop().unwrap();
                 match x_stack_value {
 
-                    StackValue::Refs(x) => {
+                    StackValue::Refs(refs) => {
 
                         let r = match op {
                        
                             Operation::Not => {
 
-                                vec![]
+                                let v = values.iter().filter(|x| !refs.contains(&x.0)).map(|x| x.0.clone()).collect();
+        
+                                StackValue::Refs(v)
                             },
 
                             _ => {
@@ -294,7 +284,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             }
                         };
 
-                        stack.push(StackValue::Refs(r));
+                        stack.push(r);
                     },
 
                     _ => {
@@ -302,17 +292,18 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     }
        
                  };
-
-*/
             },
            
             _ => return Err(FilterError::EvalError(format!("Unrecognized token: {:?}", token))),
         }
     }
 
-    let r = stack.pop().expect("Stack is empty, this is impossible.");
+    let r: StackValue = stack.pop().expect("Stack is empty, this is impossible.");
 
     if !stack.is_empty() {
+
+        println!("Stack: {:?}", stack);
+
         return Err(FilterError::EvalError(format!(
             "There are still {} items on the stack.",
             stack.len()
@@ -334,24 +325,13 @@ mod tests {
                 $(
                     temp_vec.push(Token::Ref($x.to_string(), None));
                 )*
-                temp_vec
-            }
-        };
-    }
-
-    macro_rules! path {
-        ( $a:expr,  $b:expr) => {
-            {
-                StackValue::Path(($a, $b))
+                StackValue::Refs(temp_vec)
             }
         };
     }
 
     #[test]
     fn test_eval() {
-
-        // pub type RefTag = (String, String, Token);
-        // pub type RefTags = Vec<RefTag>;
 
         // In the real world the idea is to get all the refs with tags from a db or whatever.
         // Maybe inefficient but will do for now.
@@ -389,34 +369,32 @@ mod tests {
             ]
         }
 
+        assert_eq!(filter_eval_str("siteRef", &get_tags), Ok(refs!("@3", "@5", "@6", "@10")));
 
-        assert_eq!(filter_eval_str("siteRef", &get_tags), Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("@3", "@5", "@6", "@10"))));
+        assert_eq!(filter_eval_str("siteRef->dis", &get_tags), Ok(refs!("@3", "@5", "@6", "@10")));
 
-        assert_eq!(filter_eval_str("siteRef->dis", &get_tags),
-            Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
-
-        assert_eq!(filter_eval_str("siteRef->heat", &get_tags),
-            Ok(path!(refs!("@3", "@6"), refs!("@1", "@3", "@4", "@5"))));
+        assert_eq!(filter_eval_str("siteRef->heat", &get_tags), Ok(refs!("@3", "@6")));
 
         // Needs to fail
         // assert_eq!(filter_eval_str("siteRef->elec->dis", &get_tags),
         //     Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
 
-        assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags),
-            Ok(path!(refs!("@3", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
+        assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
 
   
         // Entity has siteRef Tag that points to entity With equipRef which points to entity with dis tag
-        assert_eq!(filter_eval_str("siteRef->equipRef->pointRef->dis", &get_tags),
-            Ok(path!(refs!("@3", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
+        assert_eq!(filter_eval_str("siteRef->equipRef->pointRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
+        
+        assert_eq!(filter_eval_str("elec", &get_tags), Ok(refs!("@1", "@3", "@5")));
+        assert_eq!(filter_eval_str("heat", &get_tags), Ok(refs!("@1", "@3", "@4", "@5")));
+        assert_eq!(filter_eval_str("elec and heat", &get_tags), Ok(refs!("@1", "@3", "@5")));
+        assert_eq!(filter_eval_str("elec or heat", &get_tags), Ok(refs!("@1", "@3", "@4", "@5")));
+        assert_eq!(filter_eval_str("not elec", &get_tags), Ok(refs!("@2", "@4", "@6", "@7", "@8", "@9", "@10", "@11")));
+        assert_eq!(filter_eval_str("not elec and water", &get_tags), Ok(refs!()));
+        assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
+        assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
 
 
-        // println!("{:?}", filter_eval_str("elec and heat", &get_tags));
-        // println!("{:?}", filter_eval_str("elec or heat", &get_tags));
-        // println!("{:?}", filter_eval_str("not elec", &get_tags));
-        // println!("{:?}", filter_eval_str("not elec and water", &get_tags));
-        // println!("{:?}", filter_eval_str("not elec and heat", &get_tags));
-        // println!("{:?}", filter_eval_str("elec and siteRef->geoCity", &get_tags));
-        // println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
+        println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
     }
 }
