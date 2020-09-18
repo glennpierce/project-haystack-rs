@@ -147,9 +147,17 @@ fn get_routes_for_path(values: &RefTags, tags: &Vec<Token>) -> Vec<Vec<(Token, O
     }
 
     // We must remove ids in last row(leafs)
-    // let current_ids: Vec<Token> = tmp.iter().map(|i| i.0.clone()).collect();
-    // routes[index-1] = routes[index-1].clone().into_iter().filter(|x| current_ids.contains(&x.1.clone().unwrap())).collect();
- 
+    let len = routes.len();
+    if len >= 2 {
+        // println!("routes pre: {:?}", routes);
+        // Should not be any Nones in penultimate_refs as they should be refs to next layer
+        let penultimate_refs: Vec<Token> = routes[len-2].iter().map(|i| i.1.clone().unwrap()).collect();
+        // println!("penultimate_refs: {:?}", penultimate_refs);
+        routes[len-1] = routes[len-1].clone().into_iter().filter(|x| penultimate_refs.contains(&x.0.clone())).collect();
+    }
+
+    // println!("routes post: {:?}", routes);
+
     routes
 }
 
@@ -158,7 +166,9 @@ fn traverse_up_routes_removing_paths(original_routes: &Vec<Vec<(Token, Option<To
     let mut routes = original_routes.clone();
   
     for index in (1..routes.len()).rev() {
-        let ids_in_route: Vec<Token> = original_routes[index].iter().map(|i| i.0.clone()).collect();
+        //println!("index: {}", index);
+        let ids_in_route: Vec<Token> = routes[index].iter().map(|i| i.0.clone()).collect();
+        //println!("ids_in_route: {:?}", ids_in_route);
         routes[index-1] = original_routes[index-1].clone().into_iter().filter(|x| ids_in_route.contains(&x.1.clone().unwrap())).collect();
     }
 
@@ -421,7 +431,7 @@ mod tests {
         assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
         assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
 
-        let routes1 = vec![
+        let routes = vec![
                         vec![(token_ref!("@3"), Some(token_ref!("@1"))),
                              (token_ref!("@6"), Some(token_ref!("@4"))),
                              (token_ref!("@10"), Some(token_ref!("@11")))],
@@ -437,39 +447,24 @@ mod tests {
                              (token_ref!("@5"), None),
                              (token_ref!("@6"), None),
                              (token_ref!("@7"), None),
-                             (token_ref!("@8"), None),
                              (token_ref!("@9"), None),
                              (token_ref!("@10"), None),
                              (token_ref!("@11"), None)]];
 
-        
-        // let route1 = vec![(Token::Ref("@1".to_string(), None), Token::Ref("@11".to_string(), None))];
 
-        println!("{:?}",  traverse_up_routes_removing_paths(&routes1));
-
-        let routes2 = vec![
-                        vec![(token_ref!("@3"), Some(token_ref!("@1"))),
-                             (token_ref!("@6"), Some(token_ref!("@4"))),
-                             (token_ref!("@10"), Some(token_ref!("@11")))],
-                        vec![(token_ref!("@1"), Some(token_ref!("@2"))),
-                             (token_ref!("@4"), Some(token_ref!("@7"))),
-                             (token_ref!("@11"), Some(token_ref!("@7")))],
-                        vec![(token_ref!("@2"), Some(token_ref!("@9"))),
-                             (token_ref!("@7"), Some(token_ref!("@8")))],
-                        vec![(token_ref!("@1"), None),
-                             (token_ref!("@2"), None),
-                             (token_ref!("@3"), None),
-                             (token_ref!("@4"), None),
-                             (token_ref!("@5"), None),
-                             (token_ref!("@6"), None),
-                             (token_ref!("@7"), None),
-                           
-                             (token_ref!("@9"), None),
-                             (token_ref!("@10"), None),
-                             (token_ref!("@11"), None)]];
-
-        println!("{:?}",  traverse_up_routes_removing_paths(&routes2));
-
-     //   println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
+        assert_eq!(traverse_up_routes_removing_paths(&routes), vec![
+            vec![(token_ref!("@3"), Some(token_ref!("@1")))],
+            vec![(token_ref!("@1"), Some(token_ref!("@2")))],
+            vec![(token_ref!("@2"), Some(token_ref!("@9")))],
+            vec![(token_ref!("@1"), None),
+                 (token_ref!("@2"), None),
+                 (token_ref!("@3"), None),
+                 (token_ref!("@4"), None),
+                 (token_ref!("@5"), None),
+                 (token_ref!("@6"), None),
+                 (token_ref!("@7"), None),
+                 (token_ref!("@9"), None),
+                 (token_ref!("@10"), None),
+                 (token_ref!("@11"), None)]]);
     }
 }
