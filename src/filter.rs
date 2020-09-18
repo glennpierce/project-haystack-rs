@@ -146,6 +146,10 @@ fn get_routes_for_path(values: &RefTags, tags: &Vec<Token>) -> Vec<Vec<(Token, O
         routes[index] = tmp;
     }
 
+    // We must remove ids in last row(leafs)
+    // let current_ids: Vec<Token> = tmp.iter().map(|i| i.0.clone()).collect();
+    // routes[index-1] = routes[index-1].clone().into_iter().filter(|x| current_ids.contains(&x.1.clone().unwrap())).collect();
+ 
     routes
 }
 
@@ -417,7 +421,7 @@ mod tests {
         assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
         assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
 
-        let routes = vec![
+        let routes1 = vec![
                         vec![(token_ref!("@3"), Some(token_ref!("@1"))),
                              (token_ref!("@6"), Some(token_ref!("@4"))),
                              (token_ref!("@10"), Some(token_ref!("@11")))],
@@ -441,8 +445,30 @@ mod tests {
         
         // let route1 = vec![(Token::Ref("@1".to_string(), None), Token::Ref("@11".to_string(), None))];
 
-        println!("{:?}",  traverse_up_routes_removing_paths(&routes));
+        println!("{:?}",  traverse_up_routes_removing_paths(&routes1));
 
+        let routes2 = vec![
+                        vec![(token_ref!("@3"), Some(token_ref!("@1"))),
+                             (token_ref!("@6"), Some(token_ref!("@4"))),
+                             (token_ref!("@10"), Some(token_ref!("@11")))],
+                        vec![(token_ref!("@1"), Some(token_ref!("@2"))),
+                             (token_ref!("@4"), Some(token_ref!("@7"))),
+                             (token_ref!("@11"), Some(token_ref!("@7")))],
+                        vec![(token_ref!("@2"), Some(token_ref!("@9"))),
+                             (token_ref!("@7"), Some(token_ref!("@8")))],
+                        vec![(token_ref!("@1"), None),
+                             (token_ref!("@2"), None),
+                             (token_ref!("@3"), None),
+                             (token_ref!("@4"), None),
+                             (token_ref!("@5"), None),
+                             (token_ref!("@6"), None),
+                             (token_ref!("@7"), None),
+                           
+                             (token_ref!("@9"), None),
+                             (token_ref!("@10"), None),
+                             (token_ref!("@11"), None)]];
+
+        println!("{:?}",  traverse_up_routes_removing_paths(&routes2));
 
      //   println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
     }
