@@ -85,6 +85,19 @@ pub fn contains_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> bool
     v.iter().filter(|&t| t.contains_ref_with_id(id_token)).peekable().peek().is_some()
 }
 
+pub fn get_tag_value_for_first_tag_with_id(v: &Vec<Tag>, id_token: &Token) -> Option<Token>
+{
+    let result_option: Option<&Tag> = v.iter().find(|t| t.ident == *id_token);
+
+    if result_option.is_none() {
+        return None;
+    }
+
+    let result: &Tag = result_option.unwrap();
+
+    result.get_value::<Token>()
+}
+
 pub fn find_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> Option<Token>
 {
     let result_option: Option<&Tag> = v.iter().find(|t| t.contains_ref_with_id(id_token));
@@ -225,18 +238,54 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                         println!("tags: {:?}", tags);
 
-                        let routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
+                        let mut routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
+                        // Check the leaf tokens for the comparison first.
+                        // Then go up each level of routes removing possible routes to now missing leafs
+                        let leaves = routes[routes.len() - 1].clone();
+                        let mut new_leaves: Vec<(Token, Option<Token>)> = vec![];
 
-                        match op {
-                            Operation::Equals => {
-                                // Check the leaf tokens for the comparison first.
-                                // Then go up each level of routes removing possible routes to now missing leafs
+                        for leaf in leaves.iter() {
 
-                                println!("leafs: {:?}", routes[routes.len() - 1]);
-                            },
-                            _ => {
-                                return Err(FilterError::EvalError("Unexpected comparison operation".to_string()));
+                            let entity: &RefTag = values.iter().filter(|&i| i.0 == leaf.0).next().unwrap();
+        
+                            let value: Token = get_tag_value_for_first_tag_with_id(&entity.1, &tags[tags.len()-1]).unwrap();
+
+                            let token_val = match *val.clone() {
+                                FilterToken::Val(v) => Some(v),
+                                _ => None
+                            };
+
+                            match op {
+                                Operation::Equals => {
+    
+                                    println!("Equals: {:?}  {:?}", value, token_val);
+
+                                    if value == token_val.unwrap() {
+                                        new_leaves.push(leaf.clone());
+                                    }
+
+
+                                },
+                                _ => {
+                                    return Err(FilterError::EvalError("Unexpected comparison operation".to_string()));
+                                }
+
                             }
+                        }
+
+                        let route_len = routes.len();
+                        let no_new_leaves = new_leaves.is_empty();
+                        
+                        if !no_new_leaves && route_len >= 1 {
+                            routes[route_len-1] = new_leaves;
+                            routes = traverse_up_routes_removing_paths(&routes);
+                        }
+
+                        if no_new_leaves {
+                            stack.push(StackValue::Refs(vec![]));
+                        }
+                        else {
+                            stack.push(StackValue::Refs(routes[0].iter().map(|x|x.0.clone()).collect()));
                         }
                     }
                     _ => {
@@ -379,7 +428,7 @@ mod tests {
             vec![
 
                 (Token::Ref("@1".to_string(), None), vec![Tag::new_string("dis", "One"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
-                                                          Tag::new_string("water", "water"), Tag::new_string("geoCity", "geoCity"), Tag::new_ref("equipRef", "@2")]),
+                                                          Tag::new_string("water", "water"), Tag::new_string("geoCity", "Chicago"), Tag::new_ref("equipRef", "@2")]),
 
                 (Token::Ref("@2".to_string(), None), vec![Tag::new_string("dis", "Two"), Tag::new_ref("pointRef", "@9")]),
 
@@ -403,7 +452,7 @@ mod tests {
                 (Token::Ref("@10".to_string(), None), vec![Tag::new_string("dis", "Ten"), Tag::new_ref("siteRef", "@11")]),
 
                 (Token::Ref("@11".to_string(), None), vec![Tag::new_string("dis", "Eleven"), Tag::new_string("geoCounty", "Cornwall"),
-                                                          Tag::new_ref("equipRef", "@7")]),
+                                                          Tag::new_ref("equipRef", "@7"), Tag::new_number("carnego_number_of_bedrooms", 3.0, "")]),
              
             ]
         }
@@ -468,7 +517,12 @@ mod tests {
                  (token_ref!("@10"), None),
                  (token_ref!("@11"), None)]]);
 
-        println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
+        assert_eq!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags), Ok(refs!("@3")));
 
+        assert_eq!(filter_eval_str("geoCity == \"Chicago\"", &get_tags), Ok(refs!("@1")));
+
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &get_tags), Ok(refs!("@11")));
+
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 5.0", &get_tags), Ok(refs!()));
     }
 } 

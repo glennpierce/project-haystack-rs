@@ -60,7 +60,7 @@ impl std::error::Error for TokenParseError {
 }
 
 // I have ZincNumber so we can implement Eq and put Tokens into HashSets etc as f64 cannot support Eq
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd)]
 pub struct ZincNumber {
     number: f64,
 }
@@ -74,6 +74,12 @@ impl ZincNumber {
 }
 
 impl Eq for ZincNumber {}
+
+impl PartialEq for ZincNumber {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
 
 impl Ord for ZincNumber {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -437,6 +443,11 @@ impl Tag {
         Tag::new_from_token(Token::Id(id.to_string()), Token::EscapedString(value.to_string()))
     }
 
+    pub fn new_number(id: &str, value: f64, units: &str) -> Self {
+
+        Tag::new_from_token(Token::Id(id.to_string()), Token::Number(ZincNumber::new(value), units.to_string()))
+    }
+
     pub fn new_ref_from_token(id: &Token, value: &str) -> Self {
 
         Tag::new_from_token(id.clone(), Token::Ref(value.to_string(), None))
@@ -523,44 +534,44 @@ impl Tag {
         }
     }
 
-    pub fn contains_ref_with_id_and_value(&self, id: &Token, value: &str) -> bool
-    {
-        if !variant_eq(id, &Token::Id("".to_string())) {
-            return false;
-        }
+    // pub fn contains_ref_with_id_and_value(&self, id: &Token, value: &str) -> bool
+    // {
+    //     if !variant_eq(id, &Token::Id("".to_string())) {
+    //         return false;
+    //     }
 
-        if id != &self.ident {
-            return false;
-        }
+    //     if id != &self.ident {
+    //         return false;
+    //     }
 
-        if self.value.is_none() {
-            return false;
-        }
+    //     if self.value.is_none() {
+    //         return false;
+    //     }
 
-        let v = self.value.clone().unwrap();
+    //     let v = self.value.clone().unwrap();
 
-        let token_option = v.cast_to_type::<Token>();
+    //     let token_option = v.cast_to_type::<Token>();
 
-        if token_option.is_none() {
-            return false;
-        }
+    //     if token_option.is_none() {
+    //         return false;
+    //     }
 
-        let token: Token = token_option.unwrap();
+    //     let token: Token = token_option.unwrap();
 
-        match &token {
+    //     match &token {
            
-            Token::Ref(val, display) => {
+    //         Token::Ref(val, display) => {
                 
-                if val == value {
-                    return true;
-                }
+    //             if val == value {
+    //                 return true;
+    //             }
 
-                false
-            },
+    //             false
+    //         },
 
-            _ => false
-        }
-    }
+    //         _ => false
+    //     }
+    // }
 }
 
 impl PartialEq for Tag {
@@ -1337,3 +1348,17 @@ impl HVal for Grid {
 }
 
 //type EmpytTags = Box::new(vec![]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
+    #[test]
+    fn token_test1() {
+        use super::*;
+
+        assert_ne!(ZincNumber::new(5.0), ZincNumber::new(3.0));
+        assert_eq!(ZincNumber::new(5.0), ZincNumber::new(5.0));
+    }
+}
