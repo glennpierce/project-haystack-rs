@@ -236,7 +236,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
 
                     FilterToken::Path(ref tags) => { 
 
-                        println!("tags: {:?}", tags);
+                        // println!("tags: {:?}", tags);
 
                         let mut routes: Vec<Vec<(Token, Option<Token>)>> = get_routes_for_path(&values, &tags);
                         // Check the leaf tokens for the comparison first.
@@ -258,13 +258,43 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                             match op {
                                 Operation::Equals => {
     
-                                    println!("Equals: {:?}  {:?}", value, token_val);
+                                    // println!("Equals: {:?}  {:?}", value, token_val);
 
                                     if value == token_val.unwrap() {
                                         new_leaves.push(leaf.clone());
                                     }
+                                },
+                                Operation::MoreThan => {
+    
+                                    // println!("Equals: {:?}  {:?}", value, token_val);
 
+                                    if value > token_val.unwrap() {
+                                        new_leaves.push(leaf.clone());
+                                    }
+                                },
+                                Operation::MoreThanEquals => {
+    
+                                    // println!("Equals: {:?}  {:?}", value, token_val);
 
+                                    if value >= token_val.unwrap() {
+                                        new_leaves.push(leaf.clone());
+                                    }
+                                },
+                                Operation::LessThan => {
+    
+                                    // println!("Equals: {:?}  {:?}", value, token_val);
+
+                                    if value < token_val.unwrap() {
+                                        new_leaves.push(leaf.clone());
+                                    }
+                                },
+                                Operation::LessThanEquals => {
+    
+                                    // println!("Equals: {:?}  {:?}", value, token_val);
+
+                                    if value <= token_val.unwrap() {
+                                        new_leaves.push(leaf.clone());
+                                    }
                                 },
                                 _ => {
                                     return Err(FilterError::EvalError("Unexpected comparison operation".to_string()));
@@ -293,7 +323,7 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
                     }
                 }
 
-                println!("Compare {:?} {:?} {:?}", path, op, val);
+                // println!("Compare {:?} {:?} {:?}", path, op, val);
             },
             FilterToken::Binary(op) => {
 
@@ -524,5 +554,11 @@ mod tests {
         assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &get_tags), Ok(refs!("@11")));
 
         assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 5.0", &get_tags), Ok(refs!()));
+
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 5.0", &get_tags), Ok(refs!()));
+
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms < 1.0", &get_tags), Ok(refs!()));
+
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 1.0", &get_tags), Ok(refs!("@11")));
     }
 } 
