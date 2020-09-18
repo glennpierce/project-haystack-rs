@@ -157,8 +157,9 @@ fn get_routes_for_path(values: &RefTags, tags: &Vec<Token>) -> Vec<Vec<(Token, O
     }
 
     // println!("routes post: {:?}", routes);
+    traverse_up_routes_removing_paths(&routes)
 
-    routes
+    // routes
 }
 
 fn traverse_up_routes_removing_paths(original_routes: &Vec<Vec<(Token, Option<Token>)>>) -> Vec<Vec<(Token, Option<Token>)>> {
@@ -466,5 +467,8 @@ mod tests {
                  (token_ref!("@9"), None),
                  (token_ref!("@10"), None),
                  (token_ref!("@11"), None)]]);
+
+        println!("\n\n{:?}", filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags));
+
     }
-}
+} 
