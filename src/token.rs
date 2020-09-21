@@ -146,6 +146,23 @@ pub enum Token {
     Ver(String),
 }
 
+impl Token {
+    pub fn as_str(&self) -> Option<String> {
+    
+        match &self {
+            Token::EscapedString(id) => Some(id.to_string()),
+            _ => None
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<i64> {
+    
+        match &self {
+            Token::Number(id, units) => Some(id.number as i64),
+            _ => None
+        }
+    }
+}
 
 // impl Hash for Token {
 //     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -984,6 +1001,10 @@ impl Cols {
 
     pub fn push(&mut self, col: Col) {
         self.cols.push(col);
+    }
+
+    pub fn len(&self) -> usize {
+        self.cols.len()
     }
 }
 
