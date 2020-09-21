@@ -909,7 +909,7 @@ impl Col {
         }
     }
 
-    pub fn get_id_as_integr(&self) -> Option<i64> {
+    pub fn get_id_as_integer(&self) -> Option<i64> {
     
         match &self.id {
             Token::Number(id, units) => Some(id.number as i64),
