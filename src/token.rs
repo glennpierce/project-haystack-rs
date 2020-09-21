@@ -909,6 +909,14 @@ impl Col {
         }
     }
 
+    pub fn get_id_as_integr(&self) -> Option<i64> {
+    
+        match &self.id {
+            Token::Number(id, units) => Some(id.number as i64),
+            _ => None
+        }
+    }
+
     // pub fn get_id_as_str(&self) -> Option<String> {
     
     //     match &self.id {
