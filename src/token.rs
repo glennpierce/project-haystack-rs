@@ -908,6 +908,14 @@ impl Col {
             _ => None
         }
     }
+
+    // pub fn get_id_as_str(&self) -> Option<String> {
+    
+    //     match &self.id {
+    //         Token::EscapedString(id) => Some(id.to_string()),
+    //         _ => None
+    //     }
+    // }
 }
 
 impl PartialEq for Col {

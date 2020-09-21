@@ -590,7 +590,6 @@ fn col<'a>(i: &'a str) -> IResult<&'a str, Col, (&'a str, ErrorKind)> {
 
 fn cols<'a>(i: &'a str) -> IResult<&'a str, Cols, (&'a str, ErrorKind)> {
     map(separated_list(spacey(char(',')), col), |v: Vec<Col>| {
-        println!("hmm {:?}", v);
         Cols::new(v)
     })(i)
 }
@@ -1380,5 +1379,21 @@ mod tests {
         println!("{:?}", grid(&s));
 
         assert!(grid(&s).is_ok());
+    }
+
+    #[test]
+    fn grid_read_filter_test() {
+        use super::*;
+
+        assert_nom_fn_eq_no_remain_check!(
+            grid(
+                r#"ver:"3.0"
+                filter,limit
+                "point and siteRef==@siteA",1000"#
+            ),
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("filter"), Some([])), Col(Id("limit"), Some([]))]), Rows([Row([EscapedString("point and siteRef==@siteA"), Number(ZincNumber { number: 1000.0 }, "")])]))"#
+        );
+
+
     }
 }
