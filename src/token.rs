@@ -62,7 +62,7 @@ impl std::error::Error for TokenParseError {
 // I have ZincNumber so we can implement Eq and put Tokens into HashSets etc as f64 cannot support Eq
 #[derive(Debug, Clone, PartialOrd)]
 pub struct ZincNumber {
-    number: f64,
+    pub number: f64,
 }
 
 impl ZincNumber {
