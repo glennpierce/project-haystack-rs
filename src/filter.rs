@@ -189,7 +189,7 @@ fn traverse_up_routes_removing_paths(original_routes: &Vec<Vec<(Token, Option<To
     routes
 }
 
-pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue, FilterError> 
+pub fn filter_eval_str(expr: &str, values: &RefTags) -> Result<Vec<Token>, FilterError> 
 {
     let mut stack : Vec<StackValue> = Vec::with_capacity(16);
 
@@ -197,8 +197,6 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
     // We do this for fater lookup of refs with tag
     // let mut haystack_tag_name_store: HashMap<String, Vec<Token>> = HashMap::new();
     // let mut haystack_ref_name_store: HashMap<Token, HaystackTags> = HashMap::new();
-
-    let values: RefTags = f();
 
     let tokens = tokenize(expr)?;
     let rpn = to_rpn(&tokens)?;
@@ -419,8 +417,13 @@ pub fn filter_eval_str(expr: &str, f: &dyn Fn() -> RefTags) -> Result<StackValue
             stack.len()
         )));
     }
+
+    let token_results = match r {
+        StackValue::Refs(v) => v,
+        _ => vec![],
+    };
     
-    Ok(r)
+    Ok(token_results)
 }
 
 
@@ -435,7 +438,8 @@ mod tests {
                 $(
                     temp_vec.push(Token::Ref($x.to_string(), None));
                 )*
-                StackValue::Refs(temp_vec)
+                // StackValue::Refs(temp_vec)
+                temp_vec
             }
         };
     }
@@ -487,29 +491,31 @@ mod tests {
             ]
         }
 
-        assert_eq!(filter_eval_str("siteRef", &get_tags), Ok(refs!("@3", "@5", "@6", "@10")));
+        let values: RefTags = get_tags();
 
-        assert_eq!(filter_eval_str("siteRef->dis", &get_tags), Ok(refs!("@3", "@5", "@6", "@10")));
+        assert_eq!(filter_eval_str("siteRef", &values), Ok(refs!("@3", "@5", "@6", "@10")));
 
-        assert_eq!(filter_eval_str("siteRef->heat", &get_tags), Ok(refs!("@3", "@6")));
+        assert_eq!(filter_eval_str("siteRef->dis", &values), Ok(refs!("@3", "@5", "@6", "@10")));
+
+        assert_eq!(filter_eval_str("siteRef->heat", &values), Ok(refs!("@3", "@6")));
 
         // Needs to fail
-        // assert_eq!(filter_eval_str("siteRef->elec->dis", &get_tags),
+        // assert_eq!(filter_eval_str("siteRef->elec->dis", &values),
         //     Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
 
-        assert_eq!(filter_eval_str("siteRef->equipRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
+        assert_eq!(filter_eval_str("siteRef->equipRef->dis", &values), Ok(refs!("@3", "@6", "@10")));
 
         // Entity has siteRef Tag that points to entity With equipRef which points to entity with dis tag
-        assert_eq!(filter_eval_str("siteRef->equipRef->pointRef->dis", &get_tags), Ok(refs!("@3", "@6", "@10")));
+        assert_eq!(filter_eval_str("siteRef->equipRef->pointRef->dis", &values), Ok(refs!("@3", "@6", "@10")));
         
-        assert_eq!(filter_eval_str("elec", &get_tags), Ok(refs!("@1", "@3", "@5")));
-        assert_eq!(filter_eval_str("heat", &get_tags), Ok(refs!("@1", "@3", "@4", "@5")));
-        assert_eq!(filter_eval_str("elec and heat", &get_tags), Ok(refs!("@1", "@3", "@5")));
-        assert_eq!(filter_eval_str("elec or heat", &get_tags), Ok(refs!("@1", "@3", "@4", "@5")));
-        assert_eq!(filter_eval_str("not elec", &get_tags), Ok(refs!("@2", "@4", "@6", "@7", "@8", "@9", "@10", "@11")));
-        assert_eq!(filter_eval_str("not elec and water", &get_tags), Ok(refs!()));
-        assert_eq!(filter_eval_str("not elec and heat", &get_tags), Ok(refs!("@4")));
-        assert_eq!(filter_eval_str("siteRef->geoCity", &get_tags), Ok(refs!("@3", "@6")));
+        assert_eq!(filter_eval_str("elec", &values), Ok(refs!("@1", "@3", "@5")));
+        assert_eq!(filter_eval_str("heat", &values), Ok(refs!("@1", "@3", "@4", "@5")));
+        assert_eq!(filter_eval_str("elec and heat", &values), Ok(refs!("@1", "@3", "@5")));
+        assert_eq!(filter_eval_str("elec or heat", &values), Ok(refs!("@1", "@3", "@4", "@5")));
+        assert_eq!(filter_eval_str("not elec", &values), Ok(refs!("@2", "@4", "@6", "@7", "@8", "@9", "@10", "@11")));
+        assert_eq!(filter_eval_str("not elec and water", &values), Ok(refs!()));
+        assert_eq!(filter_eval_str("not elec and heat", &values), Ok(refs!("@4")));
+        assert_eq!(filter_eval_str("siteRef->geoCity", &values), Ok(refs!("@3", "@6")));
 
         let routes = vec![
                         vec![(token_ref!("@3"), Some(token_ref!("@1"))),
@@ -547,18 +553,18 @@ mod tests {
                  (token_ref!("@10"), None),
                  (token_ref!("@11"), None)]]);
 
-        assert_eq!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &get_tags), Ok(refs!("@3")));
+        assert_eq!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &values), Ok(refs!("@3")));
 
-        assert_eq!(filter_eval_str("geoCity == \"Chicago\"", &get_tags), Ok(refs!("@1")));
+        assert_eq!(filter_eval_str("geoCity == \"Chicago\"", &values), Ok(refs!("@1")));
 
-        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &get_tags), Ok(refs!("@11")));
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &values), Ok(refs!("@11")));
 
-        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 5.0", &get_tags), Ok(refs!()));
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms == 5.0", &values), Ok(refs!()));
 
-        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 5.0", &get_tags), Ok(refs!()));
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 5.0", &values), Ok(refs!()));
 
-        assert_eq!(filter_eval_str("carnego_number_of_bedrooms < 1.0", &get_tags), Ok(refs!()));
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms < 1.0", &values), Ok(refs!()));
 
-        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 1.0", &get_tags), Ok(refs!("@11")));
+        assert_eq!(filter_eval_str("carnego_number_of_bedrooms > 1.0", &values), Ok(refs!("@11")));
     }
 } 

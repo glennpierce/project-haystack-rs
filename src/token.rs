@@ -921,18 +921,18 @@ impl Col {
     pub fn get_id_as_str(&self) -> Option<String> {
     
         match &self.id {
-            Token::EscapedString(id) => Some(id.to_string()),
+            Token::Id(id) => Some(id.to_string()),
             _ => None
         }
     }
 
-    pub fn get_id_as_integer(&self) -> Option<i64> {
+    // pub fn get_id_as_integer(&self) -> Option<i64> {
     
-        match &self.id {
-            Token::Number(id, units) => Some(id.number as i64),
-            _ => None
-        }
-    }
+    //     match &self.id {
+    //         Token::Number(id, units) => Some(id.number as i64),
+    //         _ => None
+    //     }
+    // }
 
     // pub fn get_id_as_str(&self) -> Option<String> {
     
