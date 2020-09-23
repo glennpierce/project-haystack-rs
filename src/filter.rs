@@ -471,103 +471,103 @@ mod tests {
 
             vec![
 
-                (Token::Ref("@1".to_string(), None), vec![Tag::new_string("dis", "One"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
-                                                          Tag::new_string("water", "water"), Tag::new_string("geoCity", "Chicago"), Tag::new_ref("equipRef", "@2")]),
+                (Token::Ref("1".to_string(), None), vec![Tag::new_string("dis", "One"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_string("water", "water"), Tag::new_string("geoCity", "Chicago"), Tag::new_ref("equipRef", "2")]),
 
-                (Token::Ref("@2".to_string(), None), vec![Tag::new_string("dis", "Two"), Tag::new_ref("pointRef", "@9")]),
+                (Token::Ref("2".to_string(), None), vec![Tag::new_string("dis", "Two"), Tag::new_ref("pointRef", "9")]),
 
-                (Token::Ref("@3".to_string(), None), vec![Tag::new_string("dis", "Three"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
-                                                          Tag::new_ref("siteRef", "@1")]),
+                (Token::Ref("3".to_string(), None), vec![Tag::new_string("dis", "Three"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_ref("siteRef", "1")]),
 
-                (Token::Ref("@4".to_string(), None), vec![Tag::new_string("dis", "Four"), Tag::new_string("heat", "heat"), Tag::new_string("geoCity", "London"),
-                                                          Tag::new_ref("equipRef", "@7")]),
+                (Token::Ref("4".to_string(), None), vec![Tag::new_string("dis", "Four"), Tag::new_string("heat", "heat"), Tag::new_string("geoCity", "London"),
+                                                          Tag::new_ref("equipRef", "7")]),
 
-                (Token::Ref("@5".to_string(), None), vec![Tag::new_string("dis", "Five"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
-                                                          Tag::new_string("water", "water"), Tag::new_ref("siteRef", "@2")]),
+                (Token::Ref("5".to_string(), None), vec![Tag::new_string("dis", "Five"), Tag::new_string("elec", "elec"), Tag::new_string("heat", "heat"),
+                                                          Tag::new_string("water", "water"), Tag::new_ref("siteRef", "2")]),
 
-                (Token::Ref("@6".to_string(), None), vec![Tag::new_string("dis", "Six"), Tag::new_ref("siteRef", "@4")]),
+                (Token::Ref("6".to_string(), None), vec![Tag::new_string("dis", "Six"), Tag::new_ref("siteRef", "4")]),
             
-                (Token::Ref("@7".to_string(), None), vec![Tag::new_string("dis", "Seven"),  Tag::new_ref("pointRef", "@8")]),
+                (Token::Ref("7".to_string(), None), vec![Tag::new_string("dis", "Seven"),  Tag::new_ref("pointRef", "8")]),
                 
-                (Token::Ref("@8".to_string(), None), vec![Tag::new_string("dis", "Eight")]),
+                (Token::Ref("8".to_string(), None), vec![Tag::new_string("dis", "Eight")]),
 
-                (Token::Ref("@9".to_string(), None), vec![Tag::new_string("dis", "Nine")]),
+                (Token::Ref("9".to_string(), None), vec![Tag::new_string("dis", "Nine")]),
 
-                (Token::Ref("@10".to_string(), None), vec![Tag::new_string("dis", "Ten"), Tag::new_ref("siteRef", "@11")]),
+                (Token::Ref("10".to_string(), None), vec![Tag::new_string("dis", "Ten"), Tag::new_ref("siteRef", "11")]),
 
-                (Token::Ref("@11".to_string(), None), vec![Tag::new_string("dis", "Eleven"), Tag::new_string("geoCounty", "Cornwall"),
-                                                          Tag::new_ref("equipRef", "@7"), Tag::new_number("carnego_number_of_bedrooms", 3.0, "")]),
+                (Token::Ref("11".to_string(), None), vec![Tag::new_string("dis", "Eleven"), Tag::new_string("geoCounty", "Cornwall"),
+                                                          Tag::new_ref("equipRef", "7"), Tag::new_number("carnego_number_of_bedrooms", 3.0, "")]),
              
             ]
         }
 
         let values: RefTags = get_tags();
 
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef", &values)), refs!("@3", "@5", "@6", "@10"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef", &values)), refs!("3", "5", "6", "10"));
 
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef->dis", &values)), refs!("@3", "@5", "@6", "@10"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef->dis", &values)), refs!("3", "5", "6", "10"));
 
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef->heat", &values)), refs!("@3", "@6"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef->heat", &values)), refs!("3", "6"));
 
         // Needs to fail
         // assert_eq!(filter_eval_str("siteRef->elec->dis", &values),
-        //     Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("@1", "@2", "@3", "@4", "@5", "@6", "@7", "@8", "@9", "@10", "@11"))));
+        //     Ok(path!(refs!("@3", "@5", "@6", "@10"), refs!("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"))));
 
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef->equipRef->dis", &values)), refs!("@3", "@6", "@10"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef->equipRef->dis", &values)), refs!("3", "6", "10"));
 
         // Entity has siteRef Tag that points to entity With equipRef which points to entity with dis tag
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef->equipRef->pointRef->dis", &values)), refs!("@3", "@6", "@10"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef->equipRef->pointRef->dis", &values)), refs!("3", "6", "10"));
         
-        assert_eq!(filter_tokens!(filter_eval_str("elec", &values)), refs!("@1", "@3", "@5"));
-        assert_eq!(filter_tokens!(filter_eval_str("heat", &values)), refs!("@1", "@3", "@4", "@5"));
-        assert_eq!(filter_tokens!(filter_eval_str("elec and heat", &values)), refs!("@1", "@3", "@5"));
-        assert_eq!(filter_tokens!(filter_eval_str("elec or heat", &values)), refs!("@1", "@3", "@4", "@5"));
-        assert_eq!(filter_tokens!(filter_eval_str("not elec", &values)), refs!("@2", "@4", "@6", "@7", "@8", "@9", "@10", "@11"));
+        assert_eq!(filter_tokens!(filter_eval_str("elec", &values)), refs!("1", "3", "5"));
+        assert_eq!(filter_tokens!(filter_eval_str("heat", &values)), refs!("1", "3", "4", "5"));
+        assert_eq!(filter_tokens!(filter_eval_str("elec and heat", &values)), refs!("1", "3", "5"));
+        assert_eq!(filter_tokens!(filter_eval_str("elec or heat", &values)), refs!("1", "3", "4", "5"));
+        assert_eq!(filter_tokens!(filter_eval_str("not elec", &values)), refs!("2", "4", "6", "7", "8", "9", "10", "11"));
         assert_eq!(filter_tokens!(filter_eval_str("not elec and water", &values)), refs!());
-        assert_eq!(filter_tokens!(filter_eval_str("not elec and heat", &values)), refs!("@4"));
-        assert_eq!(filter_tokens!(filter_eval_str("siteRef->geoCity", &values)), refs!("@3", "@6"));
+        assert_eq!(filter_tokens!(filter_eval_str("not elec and heat", &values)), refs!("4"));
+        assert_eq!(filter_tokens!(filter_eval_str("siteRef->geoCity", &values)), refs!("3", "6"));
 
         let routes = vec![
-                        vec![(token_ref!("@3"), Some(token_ref!("@1"))),
-                             (token_ref!("@6"), Some(token_ref!("@4"))),
-                             (token_ref!("@10"), Some(token_ref!("@11")))],
-                        vec![(token_ref!("@1"), Some(token_ref!("@2"))),
-                             (token_ref!("@4"), Some(token_ref!("@7"))),
-                             (token_ref!("@11"), Some(token_ref!("@7")))],
-                        vec![(token_ref!("@2"), Some(token_ref!("@9"))),
-                             (token_ref!("@7"), Some(token_ref!("@8")))],
-                        vec![(token_ref!("@1"), None),
-                             (token_ref!("@2"), None),
-                             (token_ref!("@3"), None),
-                             (token_ref!("@4"), None),
-                             (token_ref!("@5"), None),
-                             (token_ref!("@6"), None),
-                             (token_ref!("@7"), None),
-                             (token_ref!("@9"), None),
-                             (token_ref!("@10"), None),
-                             (token_ref!("@11"), None)]];
+                        vec![(token_ref!("3"), Some(token_ref!("1"))),
+                             (token_ref!("6"), Some(token_ref!("4"))),
+                             (token_ref!("10"), Some(token_ref!("11")))],
+                        vec![(token_ref!("1"), Some(token_ref!("2"))),
+                             (token_ref!("4"), Some(token_ref!("7"))),
+                             (token_ref!("11"), Some(token_ref!("7")))],
+                        vec![(token_ref!("2"), Some(token_ref!("9"))),
+                             (token_ref!("7"), Some(token_ref!("8")))],
+                        vec![(token_ref!("1"), None),
+                             (token_ref!("2"), None),
+                             (token_ref!("3"), None),
+                             (token_ref!("4"), None),
+                             (token_ref!("5"), None),
+                             (token_ref!("6"), None),
+                             (token_ref!("7"), None),
+                             (token_ref!("9"), None),
+                             (token_ref!("10"), None),
+                             (token_ref!("11"), None)]];
 
 
         assert_eq!(traverse_up_routes_removing_paths(&routes), vec![
-            vec![(token_ref!("@3"), Some(token_ref!("@1")))],
-            vec![(token_ref!("@1"), Some(token_ref!("@2")))],
-            vec![(token_ref!("@2"), Some(token_ref!("@9")))],
-            vec![(token_ref!("@1"), None),
-                 (token_ref!("@2"), None),
-                 (token_ref!("@3"), None),
-                 (token_ref!("@4"), None),
-                 (token_ref!("@5"), None),
-                 (token_ref!("@6"), None),
-                 (token_ref!("@7"), None),
-                 (token_ref!("@9"), None),
-                 (token_ref!("@10"), None),
-                 (token_ref!("@11"), None)]]);
+            vec![(token_ref!("3"), Some(token_ref!("1")))],
+            vec![(token_ref!("1"), Some(token_ref!("2")))],
+            vec![(token_ref!("2"), Some(token_ref!("9")))],
+            vec![(token_ref!("1"), None),
+                 (token_ref!("2"), None),
+                 (token_ref!("3"), None),
+                 (token_ref!("4"), None),
+                 (token_ref!("5"), None),
+                 (token_ref!("6"), None),
+                 (token_ref!("7"), None),
+                 (token_ref!("9"), None),
+                 (token_ref!("10"), None),
+                 (token_ref!("11"), None)]]);
 
-        assert_eq!(filter_tokens!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &values)), refs!("@3"));
+        assert_eq!(filter_tokens!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &values)), refs!("3"));
 
-        assert_eq!(filter_tokens!(filter_eval_str("geoCity == \"Chicago\"", &values)), refs!("@1"));
+        assert_eq!(filter_tokens!(filter_eval_str("geoCity == \"Chicago\"", &values)), refs!("1"));
 
-        assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &values)), refs!("@11"));
+        assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms == 3.0", &values)), refs!("11"));
 
         assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms == 5.0", &values)), refs!());
 
@@ -575,7 +575,7 @@ mod tests {
 
         assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms < 1.0", &values)), refs!());
 
-        assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms > 1.0", &values)), refs!("@11"));
+        assert_eq!(filter_tokens!(filter_eval_str("carnego_number_of_bedrooms > 1.0", &values)), refs!("11"));
 
     }
 } 
