@@ -150,6 +150,8 @@ impl Token {
     pub fn as_str(&self) -> Option<String> {
     
         match &self {
+            Token::Id(id) => Some(id.to_string()),
+            Token::Ref(id, _) => Some(id.to_string()),
             Token::EscapedString(id) => Some(id.to_string()),
             _ => None
         }
