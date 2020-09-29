@@ -663,6 +663,10 @@ impl Tags {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.tags.len()
+    }
+
     pub fn get(&self, id: &str) -> Option<&Tag> {
         for t in self.tags.iter() {
             if t.get_id() == id {
