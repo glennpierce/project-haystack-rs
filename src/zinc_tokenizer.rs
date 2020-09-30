@@ -625,9 +625,10 @@ fn rows<'a>(i: &'a str) -> IResult<&'a str, Rows, (&'a str, ErrorKind)> {
     map(
         separated_list(spacey(nl), row), // list of rows seperated by newline
         |v: Vec<Row>| {
-            // let tmp: Vec<Box<Token>> = v.into_iter().map(|x| Box::new(x)).collect();
-            // Token::Rows(tmp)
-            Rows::new(v)
+            // Each row must end in nl we pop this here
+            let mut tmp = v.clone();
+            tmp.pop();
+            Rows::new(tmp)
         },
     )(i)
 }
@@ -667,6 +668,26 @@ fn sub_grid<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! row {
+        ( $( $x:expr ),* ) => {
+            {
+                let mut temp_vec = Vec::new();
+                $(
+                    temp_vec.push(Val::new_from_token($x));
+                )*
+                Row::new(temp_vec)
+            }
+        };
+    }
+
+    macro_rules! number {
+        ( $x:expr ) => {
+            {
+                Token::Number(ZincNumber::new($x), "".to_string())
+            }
+        };
+    }
 
     macro_rules! assert_nom_fn_eq {
         ($a:expr, $b:expr) => {
@@ -1010,25 +1031,25 @@ mod tests {
     fn row_test() {
         use super::*;
         
-
-        assert_nom_fn_eq!(
+        assert_eq!(
             row("1,2,4,5"),
-            r#"Ok(("", Row([Number(1.0, ""), Number(2.0, ""), Number(4.0, ""), Number(5.0, "")])))"#
+            Ok(("", row![number!(1.0), number!(2.0), number!(4.0), number!(5.0)]))
         );
 
-        assert_nom_fn_eq!(
-            row(r#"1,2,,5"#),
-            r#"Ok(("", Row([Number(1.0, ""), Number(2.0, ""), Null, Number(5.0, "")])))"#
+        assert_eq!(
+            row("1,2,,5"),
+            Ok(("", row![number!(1.0), number!(2.0), Token::Null, number!(5.0)]))
         );
 
-        assert_nom_fn_eq!(
-            row(r#"1 , 2, ,5"#),
-            r#"Ok(("", Row([Number(1.0, ""), Number(2.0, ""), Null, Number(5.0, "")])))"#
+        assert_eq!(
+            row("1 , 2, ,5"),
+            Ok(("", row![number!(1.0), number!(2.0), Token::Null, number!(5.0)]))
         );
 
-        assert_nom_fn_eq!(
+        assert_eq!(
             row(r#"1,,2,,5,"projName",8,,9"#),
-            r#"Ok(("", Row([Number(1.0, ""), Null, Number(2.0, ""), Null, Number(5.0, ""), EscapedString("projName"), Number(8.0, ""), Null, Number(9.0, "")])))"#
+            Ok(("", row![number!(1.0), Token::Null, number!(2.0), Token::Null, number!(5.0),
+                         Token::EscapedString("projName".to_string()), number!(8.0), Token::Null, number!(9.0)]))
         );
     }
 
@@ -1063,7 +1084,7 @@ mod tests {
         use super::*;
 
         assert_nom_fn_eq!(
-            grid("ver:\"3.0\"\nid,range\n@someTemp,\"2012-10-01\""),
+            grid("ver:\"3.0\"\nid,range\n@someTemp,\"2012-10-01\"\n"),
             r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("id"), Some([])), Col(Id("range"), Some([]))]), Rows([Row([Ref("@someTemp", None), EscapedString("2012-10-01")])]))))"#
         );
 
@@ -1080,6 +1101,17 @@ mod tests {
         assert_nom_fn_eq!(
             grid("ver:\"3.0\" id:@619265 action:\"tags\"\nparams\n"),
             r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@619265", None))), Tag(Id("action"), Some(EscapedString("tags")))])), Cols([Col(Id("params"), Some([]))]), Rows([]))))"#
+        );
+
+        // zero rows get returned here as each row needs to end with a nl
+        assert_nom_fn_eq!(
+            grid("ver:\"3.0\" id:@619265 action:\"tags\"\nparams\n[]"),
+            r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@619265", None))), Tag(Id("action"), Some(EscapedString("tags")))])), Cols([Col(Id("params"), Some([]))]), Rows([]))))"#
+        );
+
+        assert_nom_fn_eq!(
+            grid("ver:\"3.0\" id:@619265 action:\"tags\"\nparams\n[]\n"),
+            r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@619265", None))), Tag(Id("action"), Some(EscapedString("tags")))])), Cols([Col(Id("params"), Some([]))]), Rows([Row([List([])])]))))"#
         );
 
         // assert_nom_fn_eq!(
@@ -1161,7 +1193,8 @@ mod tests {
         assert_nom_fn_eq_no_remain_check!(
             rows(
                 r#""RTU-1",M,@153c-699a "HQ",2005-06-01
-        "RTU-2",M,@153c-699a "HQ",1999-07-12"#
+                   "RTU-2",M,@153c-699a "HQ",1999-07-12
+                   "#
             ),
             r#"Rows([Row([EscapedString("RTU-1"), Marker, Ref("@153c-699a", Some("HQ")), Date(2005-06-01)]), Row([EscapedString("RTU-2"), Marker, Ref("@153c-699a", Some("HQ")), Date(1999-07-12)])])"#
         );
@@ -1184,7 +1217,8 @@ mod tests {
             grid(
                 r#"ver:"3.0"
                 type,val
-                "list",[1,2,3]"#
+                "list",[1,2,3]
+                "#
             ),
             r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])])]))"#
         );
@@ -1201,9 +1235,10 @@ mod tests {
             1,2
             3,4
             >>
-            "scalar","simple string""#
+            "scalar","simple string"
+            "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")]), Row([])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1218,9 +1253,10 @@ mod tests {
             1,2
             3,4
             >>, "grid"
-            "scalar","simple string""#
+            "scalar","simple string"
+            "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")]), Row([])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
     }
 

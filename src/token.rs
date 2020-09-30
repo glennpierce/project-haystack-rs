@@ -303,6 +303,12 @@ pub struct Val {
     pub hval: Box<dyn HVal>,
 }
 
+impl PartialEq for Val {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_zinc() == other.to_zinc()
+    }
+}
+
 impl Val {
     pub fn new(t: Box<dyn HVal>) -> Self {
 
@@ -1064,7 +1070,7 @@ impl HVal for Cols {
 
 //////////////////////////////////////////////////////////////
 /// <cell> ["," <cell>]* <nl>
-//#[derive(PartialEq)]
+// #[derive(PartialEq)]
 pub struct Row {
     pub cells: Vec<Val>,
 }
@@ -1113,6 +1119,12 @@ impl fmt::Debug for Row {
 impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Row({:?})", self.cells)
+    }
+}
+
+impl PartialEq for Row {
+    fn eq(&self, other: &Self) -> bool {
+        self.cells == other.cells
     }
 }
 
