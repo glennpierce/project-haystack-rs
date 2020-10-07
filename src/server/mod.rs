@@ -1033,6 +1033,8 @@ pub async fn handle_rejection(err: Rejection) -> Result<http::response::Response
         builder = builder.header("WWW-Authenticate", header);
     }
 
+    debug!("{:?}", code);
+
     Ok(builder.body(Grid::empty().to_zinc()).unwrap())
 }
 
