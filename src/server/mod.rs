@@ -20,6 +20,8 @@ use crate::hval::{HVal};
 use crate::token::*;
 use crate::error::*;
 
+use std::collections::hash_map::Entry::{Occupied, Vacant};
+
 use nom::{
     branch::alt,
     bytes::complete::{is_a, tag, tag_no_case},
@@ -40,6 +42,8 @@ use rand::rngs::OsRng;   // Specific implementation of above for strong crypto.
 use rand::prelude::*;
 
 use rand::distributions::{Alphanumeric};
+
+use std::sync::Mutex;
 
 use crate::zinc_tokenizer::grid;
 
@@ -295,26 +299,79 @@ fn xor(src1: &[u8], src2: &[u8]) -> Vec<u8> {
     v3
 }
 
-// macro_rules! return_reponse_token {
+lazy_static! {
+    static ref TEMPORARY_STORAGE: Mutex<HashMap<String, HashMap<String, String>>> = {
+        let mut m = Mutex::new(HashMap::new());
+        m
+    };
+}
 
-//     ($code:expr, $token:expr) => {
+fn set_temporary_value(handshake_token: &str, k: &str, v: &str) -> HaystackResult<()>
+{
+    let mut tmp = TEMPORARY_STORAGE.lock().unwrap();
+    let h = match tmp.entry(handshake_token.to_string()) {
+        Vacant(entry) => entry.insert(HashMap::new()),
+        Occupied(entry) => entry.into_mut(),
+    };
 
-//         {
-//             let response = warp::reply::with_status("", http::StatusCode::from_u16($code).unwrap());
-//             let response = warp::reply::with_header(response, "WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}", $token));
-//             return Ok(response);
-//         }
-//     };
-// }
+    h.entry(k.to_string()).and_modify(|e| { *e = v.to_string() }).or_insert(v.to_string());
+
+    Ok(())
+}
+
+fn get_temporary_value(handshake_token: &str, k: &str) -> HaystackResult<Option<String>>
+{
+    let tmp = TEMPORARY_STORAGE.lock().unwrap();
+    let h = tmp.get(handshake_token);
+
+    if h.is_none() {
+        return Ok(None);
+    }
+
+    let store = h.unwrap();
+
+    if !store.contains_key(k) {
+        return Ok(None);
+    }
+
+    Ok(store.get(k).cloned())
+}
+
+lazy_static! {
+    static ref AUTHTOKEN_STORAGE: Mutex<HashMap<String, String>> = {
+        let mut m = Mutex::new(HashMap::new());
+        m
+    };
+}
+
+fn set_authtoken_username(authtoken: &str, username: &str) -> HaystackResult<()>
+{
+    let mut tmp = AUTHTOKEN_STORAGE.lock().unwrap();
+    tmp.entry(authtoken.to_string()).and_modify(|e| { *e = username.to_string() }).or_insert(username.to_string());
+
+    Ok(())
+}
+
+fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<String>>
+{
+    let tmp = AUTHTOKEN_STORAGE.lock().unwrap();
+    let username_option = tmp.get(authtoken);
+
+    if username_option.is_none() {
+        return Ok(None);
+    }
+
+    Ok(username_option.cloned())
+}
 
 pub trait UserAuthStore: fmt::Debug + Send + Sync {
 
     // Return handshake token for username. If user has no handshake token generate one
-    fn get_handshake_token(&self, username: &str) -> HaystackResult<String>;
-    fn get_username(&self, handshake_token: &str) -> HaystackResult<String>;
+    // fn get_handshake_token(&self, username: &str) -> HaystackResult<String>;
+    // fn get_username(&self, handshake_token: &str) -> HaystackResult<String>;
 
-    fn set_temporary_value(&mut self, k: &str, v: &str) -> HaystackResult<()>;
-    fn get_temporary_value(&self,  k: &str) -> HaystackResult<Option<&String>>;
+    // fn set_temporary_value(&mut self, k: &str, v: &str) -> HaystackResult<()>;
+    // fn get_temporary_value(&self,  k: &str) -> HaystackResult<Option<&String>>;
 
     /// returns a base64 encoded sha256 salt of password.
     fn get_password_salt(&self) -> HaystackResult<String>;
@@ -377,13 +434,11 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
         }
 
         let username = &result.unwrap().1;
-        let handshaken_token_result = store.read().get_handshake_token(&username);
+        let handshaken_token = get_hanshake_token();
 
-        if handshaken_token_result.is_err() {
+        if set_temporary_value(handshaken_token.as_str(), "username", username).is_err() {
             return Err(reject::custom(HayStackAuthRejection));
         }
-
-        let handshaken_token = handshaken_token_result.unwrap();
 
         let response = warp::reply::with_status("", http::StatusCode::from_u16(401).unwrap());
         let response = warp::reply::with_header(response, "WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}",
@@ -405,10 +460,7 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
         // "c=biws,r=FGtSdkud2+OITwYjnsinhdFQTV30vcq9gJLfOA24,p=Rvtb2jtsDwpOTxCul7iqH+btzD8662mQNSped/x8THc="
         let parts: Vec<&str> = data_str.split(",p=").collect();
 
-        // if store.write().set_client_final_no_pf(Some(parts[0].to_string())).is_err() {
-        //     return_reponse_token!(401, &get_hanshake_token());
-        // }
-        if store.write().set_temporary_value("client_final_no_pf", &parts[0].to_string()).is_err() {
+        if set_temporary_value(client_handshake_token.as_str(), "client_final_no_pf", &parts[0].to_string()).is_err() {
             return Err(reject::custom(HayStackAuthRejection));
         }
 
@@ -427,10 +479,7 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
 
             let (remaining, _) = gs2_header(data_str).unwrap();
      
-            // if store.write().set_client_first_message(Some(remaining.to_string())).is_err() {
-            //     return_reponse_token!(401, &get_hanshake_token());
-            // }
-            if store.write().set_temporary_value("client_first_message", &remaining.to_string()).is_err() {
+            if set_temporary_value(client_handshake_token.as_str(), "client_first_message", &remaining.to_string()).is_err() {
                 return Err(reject::custom(HayStackAuthRejection));
             }
   
@@ -455,13 +504,20 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
             debug!("client_nonce hex: {:X?}", client_nonce);
 
             let data_store = store.read();
-            let stored_username_result = data_store.get_username(client_handshake_token);
+
+            let stored_username_result = get_temporary_value(client_handshake_token.as_str(), "username");
 
             if stored_username_result.is_err() {
                 return Err(reject::custom(HayStackAuthRejection));
             }
 
-            if stored_username_result.unwrap() != client_username.to_string() {
+            let stored_username_option = stored_username_result.unwrap();
+
+            if stored_username_option.is_none() {
+                return Err(reject::custom(HayStackAuthRejection));
+            }  
+
+            if stored_username_option.unwrap() != client_username.to_string() {
                 return Err(reject::custom(HayStackAuthRejection));
             }  
 
@@ -476,7 +532,7 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
             let salt = store.read().get_password_salt().expect("server salt returned error");
             let message = format!("r={},s={},i=10000", concatenated_nonce, BASE64.encode(&salt.as_bytes()));
 
-            if store.write().set_temporary_value("server_first_message", &message.to_string()).is_err() {
+            if set_temporary_value(client_handshake_token.as_str(), "server_first_message", &message.to_string()).is_err() {
                 return Err(reject::custom(HayStackAuthRejection));
             }
 
@@ -547,9 +603,9 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
 
             // We should have server_salt and client_nonce from last message
             let stored_server_salt_result = data_store.get_password_salt();
-            let stored_client_first_message_result = data_store.get_temporary_value("client_first_message");
-            let stored_server_first_message_result = data_store.get_temporary_value("server_first_message");
-            let stored_client_final_no_pf_result = data_store.get_temporary_value("client_final_no_pf");
+            let stored_client_first_message_result = get_temporary_value(client_handshake_token.as_str(), "client_first_message");
+            let stored_server_first_message_result = get_temporary_value(client_handshake_token.as_str(), "server_first_message");
+            let stored_client_final_no_pf_result = get_temporary_value(client_handshake_token.as_str(), "client_final_no_pf");
 
             if stored_server_salt_result.is_err() 
               || stored_client_first_message_result.is_err() || stored_server_first_message_result.is_err()
@@ -643,9 +699,14 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
                 let response = warp::reply::with_status("Auth successful", http::StatusCode::from_u16(200).unwrap());
                 let response = warp::reply::with_header(response, "Authentication-Info", message);
 
-                if store.write().set_temporary_value("authtoken", &auth_token).is_err() {
-                    return Err(reject::custom(HayStackAuthRejection));
-                }
+                // fn set_authtoken_username(authtoken: &str, username: &str) -> HaystackResult<()>
+
+                // fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<String>>
+
+
+                // if set_authtoken_username(&auth_token, ).is_err() {
+                //     return Err(reject::custom(HayStackAuthRejection));
+                // }
 
                 debug!("response: {:?}", response);
 
@@ -974,24 +1035,47 @@ pub fn haystack_auth_header(store: Store) -> impl Filter<Extract = (Store,), Err
                         return Ok(tmp.clone());
                     }
 
-                    let datastore = tmp.read();
-                    let stored_authtoken_result: HaystackResult<Option<&String>> = datastore.get_temporary_value("authtoken");
 
-                    if stored_authtoken_result.is_err() {
+
+
+                     // fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<String>>
+
+
+                    let authtoken_result = get_authtoken_username(key_value.1);
+
+                    if authtoken_result.is_err() {
                         return Err(reject::custom(HayStackAuthRejection));
                     }
-            
-                    let stored_authtoken_option = stored_authtoken_result.unwrap();
-            
-                    if stored_authtoken_option.is_none() {
+
+                    let authtoken_option = authtoken_result.unwrap();
+
+                    if authtoken_option.is_none() {
                         return Err(reject::custom(HayStackAuthRejection));
                     }
-            
-                    let auth_token = stored_authtoken_option.unwrap();
-            
-                    if auth_token != key_value.1 {
+
+                    if authtoken_option.unwrap() != key_value.1 {
                         return Err(reject::custom(HayStackAuthRejection));
                     }
+
+
+                    // let datastore = tmp.read();
+                    // let stored_authtoken_result: HaystackResult<Option<&String>> = datastore.get_temporary_value("authtoken");
+
+                    // if stored_authtoken_result.is_err() {
+                    //     return Err(reject::custom(HayStackAuthRejection));
+                    // }
+            
+                    // let stored_authtoken_option = stored_authtoken_result.unwrap();
+            
+                    // if stored_authtoken_option.is_none() {
+                    //     return Err(reject::custom(HayStackAuthRejection));
+                    // }
+            
+                    // let auth_token = stored_authtoken_option.unwrap();
+            
+                    // if auth_token != key_value.1 {
+                    //     return Err(reject::custom(HayStackAuthRejection));
+                    // }
             
                     Ok(tmp.clone())
                 }
