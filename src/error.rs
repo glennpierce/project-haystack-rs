@@ -183,6 +183,7 @@ impl std::error::Error for FilterTokenParseError {
 // This gives us a reasonable human readable description of `CliError` values.
 #[derive(Debug)]
 pub enum HaystackError {
+    AuthError,
     GeneralError(String),
     //ParseError(String),
     Io(std::io::Error),
@@ -200,6 +201,7 @@ pub type HaystackResult<T> = std::result::Result<T, HaystackError>;
 impl fmt::Display for HaystackError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            HaystackError::AuthError => "HaystackAuthError".to_string().fmt(f),
             HaystackError::GeneralError(ref err) => err.fmt(f),
             //HaystackError::ParseError(ref err) => err.fmt(f),
             HaystackError::Io(ref err) => err.fmt(f),
