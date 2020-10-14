@@ -1105,55 +1105,53 @@ async fn hello(token: String) -> Result<impl warp::Reply, warp::Rejection> {
     return Ok(response);
 }
 
-
 pub fn haystack_auth_header() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
 
     warp::header("Authorization").and_then (
         
-            move |auth_header: String| 
-            {
-                debug!("haystack_auth_header");
+        move |auth_header: String| 
+        {
+            debug!("haystack_auth_header");
 
-                async move {
+            async move {
 
-                    // Authorization: BEARER authToken=xxxyyyzzz
-                    let result = auth_token(&auth_header); //-> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
+                // Authorization: BEARER authToken=xxxyyyzzz
+                let result = auth_token(&auth_header); //-> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
 
-                    debug!("haystack_auth_header - auth_token: {:?}", result);
+                debug!("haystack_auth_header - auth_token: {:?}", result);
 
-                    if result.is_err() {
-                        return Err(reject::custom(HayStackAuthRejection));
-                    }
-            
-                    let (_, key_value) = result.unwrap();
-            
-                    if "PKLivoIgkH390hiKHOAutagi2Emfd5" == key_value.1 {
-                        debug!("haystack_auth_header - Allow");
-                        return Ok(key_value.1.to_string());
-                    }
-
-                    let authtoken_result = get_authtoken_username(key_value.1);
-
-                    if authtoken_result.is_err() {
-                        return Err(reject::custom(HayStackAuthRejection));
-                    }
-
-                    let authtoken_option = authtoken_result.unwrap();
-
-                    if authtoken_option.is_none() {
-                        return Err(reject::custom(HayStackAuthRejection));
-                    }
-
-                    if authtoken_option.unwrap() != key_value.1 {
-                        return Err(reject::custom(HayStackAuthRejection));
-                    }
-
-                    return Ok(key_value.1.to_string())
+                if result.is_err() {
+                    return Err(reject::custom(HayStackAuthRejection));
                 }
+        
+                let (_, key_value) = result.unwrap();
+        
+                if "PKLivoIgkH390hiKHOAutagi2Emfd5" == key_value.1 {
+                    debug!("haystack_auth_header - Allow");
+                    return Ok(key_value.1.to_string());
+                }
+
+                let authtoken_result = get_authtoken_username(key_value.1);
+
+                if authtoken_result.is_err() {
+                    return Err(reject::custom(HayStackAuthRejection));
+                }
+
+                let authtoken_option = authtoken_result.unwrap();
+
+                if authtoken_option.is_none() {
+                    return Err(reject::custom(HayStackAuthRejection));
+                }
+
+                if authtoken_option.unwrap() != key_value.1 {
+                    return Err(reject::custom(HayStackAuthRejection));
+                }
+
+                return Ok(key_value.1.to_string())
             }
+        }
     )
 }
-
 
 // This function receives a `Rejection` and tries to return a custom
 // value, otherwise simply passes the rejection along.
@@ -1216,7 +1214,7 @@ pub async fn serve() {
         .max_age(Duration::from_secs(600));
 
     fn with_salts() -> impl Filter<Extract = ((String, String),), Error = std::convert::Infallible> + Clone {
-        warp::any().map(move || ("salt".to_string(), "salted_password".to_string()))
+        warp::any().map(move || ("G2GXvHuTWUC3OZOmtNa2R3f4g1/GWA==".to_string(), "vN9cNN6WxRTOGsaylAvv9upaVPw7j/ODkZUvQnpbCp4=".to_string()))
     }
 
     let _default_auth = warp::any().map(|| {
