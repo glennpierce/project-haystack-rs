@@ -488,6 +488,307 @@ pub fn haystack_authentication_handle_hello(header: &str) -> HaystackResult<(Str
     return Ok((username.to_string(), handshaken_token.to_string()));
 }
 
+pub fn haystack_authentication_handle_hello2(header: &str) -> Result<http::response::Response<String>, warp::Rejection> {
+
+    let result = nom_username_decoded(&header);
+
+    if result.is_err() {
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    let username = &result.unwrap().1;
+    let handshaken_token = get_hanshake_token();
+
+    debug!("username: {}  handshaken_token: {}", username, handshaken_token);
+
+    let mut builder = Response::builder();
+    builder = builder.status(StatusCode::UNAUTHORIZED);
+    builder = builder.header("WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}", handshaken_token));
+    Ok(builder.body("".to_string()).unwrap())
+}
+
+pub fn haystack_authentication_handle_first_message(header: &str, salt: &str) -> Result<http::response::Response<String>, warp::Rejection> {
+
+    let (client_handshake_token, data_str) = nom_decode_scram_data(&header);
+
+    // "c=biws,r=FGtSdkud2+OITwYjnsinhdFQTV30vcq9gJLfOA24,p=Rvtb2jtsDwpOTxCul7iqH+btzD8662mQNSped/x8THc="
+    let parts: Vec<&str> = data_str.split(",p=").collect();
+
+    if set_temporary_value(client_handshake_token.as_str(), "client_final_no_pf", &parts[0].to_string()).is_err() {
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    let gs2_header_result = gs2_header(&data_str);
+    let data;
+
+    if gs2_header_result.is_ok() {
+
+        debug!("first message");
+
+        // Respond to client second message
+
+        // In response, the server sends a "server-first-message" containing the
+        // user's iteration count i and the user's salt, and appends its own
+        // nonce to the client-specified one.
+
+        let (remaining, _) = gs2_header(&data_str).unwrap();
+    
+        if set_temporary_value(client_handshake_token.as_str(), "client_first_message", &remaining.to_string()).is_err() {
+            return Err(reject::custom(HayStackAuthRejection));
+        }
+
+        debug_temporary_storage();
+
+        data = decode_scram_data(remaining, BASE64).unwrap().1;
+        debug!("data: {:?}", data);
+
+        // nonce
+        // r: This attribute specifies a sequence of random printable ASCII
+        // characters excluding ',' (which forms the nonce used as input to
+        // the hash function).  No quoting is applied to this string.
+        let server_nonce = get_nonce();
+
+        debug!("server_nonce: {:?}", server_nonce);
+        debug!("server_nonce hex: {:X?}", server_nonce);
+
+        //let salt = get_salt();
+
+        let client_username = data.get("n").unwrap();
+        let client_nonce = data.get("r").unwrap();
+
+        debug!("client_nonce: {:?}", client_nonce);
+        debug!("client_nonce hex: {:X?}", client_nonce);
+
+        
+
+        let stored_username_result = get_temporary_value(client_handshake_token.as_str(), "username");
+
+        if stored_username_result.is_err() {
+            return Err(reject::custom(HayStackAuthRejection));
+        }
+
+        let stored_username_option = stored_username_result.unwrap();
+
+        if stored_username_option.is_none() {
+            return Err(reject::custom(HayStackAuthRejection));
+        }  
+
+        if stored_username_option.unwrap() != client_username.to_string() {
+            return Err(reject::custom(HayStackAuthRejection));
+        }  
+
+        debug!("client_handshake_token: {}", client_handshake_token);
+        debug!("client_username: {}", client_username);
+        debug!("client_nonce: {}", client_nonce);
+
+        let concatenated_nonce = client_nonce.to_string() + &server_nonce;
+
+        let message = format!("r={},s={},i=10000", concatenated_nonce, BASE64.encode(&salt.as_bytes()));
+
+        if set_temporary_value(client_handshake_token.as_str(), "server_first_message", &message.to_string()).is_err() {
+            return Err(reject::custom(HayStackAuthRejection));
+        }
+
+        debug_temporary_storage();
+
+        let data = BASE64URL.encode(message.as_bytes());
+
+        let mut builder = Response::builder();
+        let header_str = format!("SCRAM handshakeToken={}, hash=SHA-256, data={}", client_handshake_token, &data);
+       
+        builder = builder.status(StatusCode::UNAUTHORIZED);
+        builder = builder.header("WWW-Authenticate", header_str);
+        return Ok(builder.body("".to_string()).unwrap());
+    }
+
+    Err(reject::custom(HayStackAuthRejection))
+}
+
+pub fn haystack_authentication_handle_final_message(header: &str, salted_password: &str) -> Result<http::response::Response<String>, warp::Rejection> {
+
+    let (client_handshake_token, data_str) = nom_decode_scram_data(&header);
+
+    println!("final message");
+
+    // To begin with, the SCRAM client is in possession of a username and
+    // password (*) (or a ClientKey/ServerKey, or SaltedPassword).  It sends
+    // the username to the server, which retrieves the corresponding
+    // authentication information, i.e., a salt, StoredKey, ServerKey, and
+    // the iteration count i.  (Note that a server implementation may choose    
+    //     to use the same iteration count for all accounts.)  The server sends
+    //     the salt and the iteration count to the client, which then computes
+    //     the following values and sends a ClientProof to the server:
+        
+    //     (*) Note that both the username and the password MUST be encoded in
+    //     UTF-8 [RFC3629].
+        
+    //     Informative Note: Implementors are encouraged to create test cases
+    //     that use both usernames and passwords with non-ASCII codepoints.  In
+    //     particular, it's useful to test codepoints whose "Unicode
+    //     Normalization Form C" and "Unicode Normalization Form KC" are
+    //     different.  Some examples of such codepoints include Vulgar Fraction
+    //     One Half (U+00BD) and Acute Accent (U+00B4).
+        
+    //       SaltedPassword  := Hi(Normalize(password), salt, i)  ->  ring::pbkdf2::derive
+    //       ClientKey       := HMAC(SaltedPassword, "Client Key")  -> ring::hmac::sign
+    //       StoredKey       := H(ClientKey)    -> ring::digest::digest
+    //       AuthMessage     := client-first-message-bare + "," +
+    //                          server-first-message + "," +
+    //                          client-final-message-without-proof
+    //       ClientSignature := HMAC(StoredKey, AuthMessage)
+    //       ClientProof     := ClientKey XOR ClientSignature
+    //       ServerKey       := HMAC(SaltedPassword, "Server Key")
+    //       ServerSignature := HMAC(ServerKey, AuthMessage)
+        
+    //     The server authenticates the client by computing the ClientSignature,
+    //     exclusive-ORing that with the ClientProof to recover the ClientKey
+    //     and verifying the correctness of the ClientKey by applying the hash
+    //     function and comparing the result to the StoredKey.  If the ClientKey
+    //     is correct, this proves that the client has access to the user's
+    //     password.
+        
+    //     Similarly, the client authenticates the server by computing the
+    //     ServerSignature and comparing it to the value sent by the server.  If
+    //     the two are equal, it proves that the server had access to the user's
+    //     ServerKey.
+        
+    //     The AuthMessage is computed by concatenating messages from the
+    //     authentication exchange.
+
+    // The server verifies the nonce and the proof, verifies that the
+    // authorization identity (if supplied by the client in the first
+    // message) is authorized to act as the authentication identity, and,
+    // finally, it responds with a "server-final-message", concluding the
+    // authentication exchange.
+    //
+
+    // We should have server_salt and client_nonce from last message
+
+    let username_result = get_temporary_value(client_handshake_token.as_str(), "username");
+
+    if username_result.is_err() {
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    let username_option = username_result.unwrap();
+
+    if username_option.is_none() {
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    let username = username_option.unwrap();
+
+    //let data_store = store.read();
+
+    // let stored_server_salt_result = data_store.get_password_salt(&username).await;
+
+    // let stored_server_salt_result: Result<String, HaystackError> = Ok("hdfjgjd".to_string());
+
+    let stored_client_first_message_result = get_temporary_value(client_handshake_token.as_str(), "client_first_message");
+    let stored_server_first_message_result = get_temporary_value(client_handshake_token.as_str(), "server_first_message");
+    let stored_client_final_no_pf_result = get_temporary_value(client_handshake_token.as_str(), "client_final_no_pf");
+
+    if stored_client_first_message_result.is_err() || stored_server_first_message_result.is_err()
+        || stored_client_final_no_pf_result.is_err() {
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    //  drop(stored_server_salt_result);
+
+    let stored_client_first_message_option = stored_client_first_message_result.unwrap();
+    let stored_server_first_message_option = stored_server_first_message_result.unwrap();
+    let stored_client_final_no_pf_option = stored_client_final_no_pf_result.unwrap();
+
+    if stored_client_first_message_option.is_none() || stored_server_first_message_option.is_none()
+        || stored_client_final_no_pf_option.is_none() {
+        debug!("No salt or nonce");
+        return Err(reject::custom(HayStackAuthRejection));
+    }
+
+    let data = decode_scram_data(&data_str, BASE64).unwrap().1;
+
+    debug!("data: {:?}", data);
+
+    //let password: String = stringprep::saslprep("pencil").unwrap().to_string();
+
+    let auth_message: String = format!("{},{},{}", 
+            &stored_client_first_message_option.unwrap().to_string(),
+            &stored_server_first_message_option.unwrap().to_string(),
+            &stored_client_final_no_pf_option.unwrap().to_string());
+
+    debug!("auth_message: {:?}", &auth_message.to_string());
+
+    //let salted_password_str = data_store.get_salted_password(&username).await.expect("unable to get salted password").to_string();
+    //let salted_password_str: String = "ddd".to_string();
+
+    debug!("salted_password: {:?}", &salted_password);
+
+    let salted_passwd = BASE64.decode(&salted_password.as_bytes()).expect("unable to decode base64");
+
+    debug!("salted_password hex: {:X?}", salted_passwd);
+
+    // var clientKey = hash("Client Key", saltedPassword);
+    // ClientKey       := HMAC(SaltedPassword, "Client Key")
+    let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
+    let signed_client_key = ring::hmac::sign(&key, "Client Key".as_bytes());
+
+    debug!("signed_client_key: {:X?}", signed_client_key);
+
+    // var storedKey = hash(clientKey);
+    // StoredKey       := H(ClientKey)
+    let stored_key = ring::digest::digest(&ring::digest::SHA256, signed_client_key.as_ref());
+    debug!("my_stored_key: {:X?}", stored_key);
+
+    let client_signature_key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, stored_key.as_ref());
+    let client_signature = ring::hmac::sign(&client_signature_key, auth_message.as_bytes());
+
+    debug!("client_signature: {:X?}", client_signature);
+
+    let client_proof_base64 = data.get("p").unwrap();
+
+    debug!("client_proof_base64: {:?}", client_proof_base64);    
+
+    let client_proof: Vec<u8> = BASE64.decode(client_proof_base64.as_bytes()).unwrap();
+
+    debug!("client_proof: {:x?}", client_proof);    
+
+    let client_key_computed: Vec<u8> = xor(&client_proof, client_signature.as_ref());
+
+    debug!("client_key_computed: {:x?}", client_key_computed);
+    debug!("signed_client_key: {:x?}", signed_client_key);
+
+    // drop(data_store);
+
+    if signed_client_key.as_ref() == client_key_computed {
+
+        let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
+        let server_key = ring::hmac::sign(&key, "Server Key".as_bytes());
+
+        debug!("signed_client_key: {:X?}", server_key);
+
+        let server_signature_key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, server_key.as_ref());
+        let server_signature = ring::hmac::sign(&server_signature_key, auth_message.as_bytes());
+
+        debug!("server_signature: {:X?}", server_signature);
+
+        let server_signature_base64 = BASE64.encode(server_signature.as_ref());
+        debug!("server_signature_base64: {:X?}", server_signature_base64);
+
+        let data = format!("v={}", server_signature_base64);
+    
+        let auth_token = get_authtoken();
+
+        let mut builder = Response::builder();
+        let message = format!("authToken={}, hash=SHA-256, data={}", auth_token, BASE64URL.encode(data.as_bytes()));
+
+        builder = builder.status(StatusCode::OK);
+        builder = builder.header("Authentication-Info", message);
+        return Ok(builder.body("Auth successful".to_string()).unwrap());
+    }
+
+    return Err(reject::custom(HayStackAuthRejection));
+}
+
 pub async fn haystack_authentication(header: String, salts: (String, String)) -> Result<impl warp::Reply, warp::Rejection> {
 
     debug!("header: {}", header);
@@ -498,311 +799,21 @@ pub async fn haystack_authentication(header: String, salts: (String, String)) ->
         // Hello message set. Here we decode the baseurl64 username
         // and pass it on
         // Note we only support SCRAM
-        let result = haystack_authentication_handle_hello(&header);
-
-        if result.is_err() {
-            return Err(reject::custom(HayStackAuthRejection));
-        }
-
-        let (username, handshaken_token) = result.unwrap();
-    
-        debug!("username: {}  handshaken_token: {}", username, handshaken_token);
-
-        remove_temporary_token(handshaken_token.as_str());
-
-        if set_temporary_value(handshaken_token.as_str(), "username", &username).is_err() {
-            return Err(reject::custom(HayStackAuthRejection));
-        }
-
-        let response = warp::reply::with_status("", http::StatusCode::from_u16(401).unwrap());
-        let response = warp::reply::with_header(response, "WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}",
-            handshaken_token));
-
-        debug!("response: {:?}", response);
-
-        return Ok(response);
+        return haystack_authentication_handle_hello2(&header);
     }
     else if header.to_lowercase().contains("scram") {
 
         let (client_handshake_token, data_str) = nom_decode_scram_data(&header);
 
-        // "c=biws,r=FGtSdkud2+OITwYjnsinhdFQTV30vcq9gJLfOA24,p=Rvtb2jtsDwpOTxCul7iqH+btzD8662mQNSped/x8THc="
-        let parts: Vec<&str> = data_str.split(",p=").collect();
-
-        if set_temporary_value(client_handshake_token.as_str(), "client_final_no_pf", &parts[0].to_string()).is_err() {
-            return Err(reject::custom(HayStackAuthRejection));
-        }
-
         let gs2_header_result = gs2_header(&data_str);
-        let data;
-
+   
         if gs2_header_result.is_ok() {
 
-            debug!("first message");
-
-            // Respond to client second message
-
-            // In response, the server sends a "server-first-message" containing the
-            // user's iteration count i and the user's salt, and appends its own
-            // nonce to the client-specified one.
-
-            let (remaining, _) = gs2_header(&data_str).unwrap();
-     
-            if set_temporary_value(client_handshake_token.as_str(), "client_first_message", &remaining.to_string()).is_err() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-  
-            debug_temporary_storage();
-
-            data = decode_scram_data(remaining, BASE64).unwrap().1;
-            debug!("data: {:?}", data);
-
-            // nonce
-            // r: This attribute specifies a sequence of random printable ASCII
-            // characters excluding ',' (which forms the nonce used as input to
-            // the hash function).  No quoting is applied to this string.
-            let server_nonce = get_nonce();
-
-            debug!("server_nonce: {:?}", server_nonce);
-            debug!("server_nonce hex: {:X?}", server_nonce);
-
-            //let salt = get_salt();
-
-            let client_username = data.get("n").unwrap();
-            let client_nonce = data.get("r").unwrap();
-
-            debug!("client_nonce: {:?}", client_nonce);
-            debug!("client_nonce hex: {:X?}", client_nonce);
-
-            
-
-            let stored_username_result = get_temporary_value(client_handshake_token.as_str(), "username");
-
-            if stored_username_result.is_err() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-            let stored_username_option = stored_username_result.unwrap();
-
-            if stored_username_option.is_none() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }  
-
-            if stored_username_option.unwrap() != client_username.to_string() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }  
-
-            debug!("client_handshake_token: {}", client_handshake_token);
-            debug!("client_username: {}", client_username);
-            debug!("client_nonce: {}", client_nonce);
-
-            let concatenated_nonce = client_nonce.to_string() + &server_nonce;
-
-            let message = format!("r={},s={},i=10000", concatenated_nonce, BASE64.encode(&salt.as_bytes()));
-
-            if set_temporary_value(client_handshake_token.as_str(), "server_first_message", &message.to_string()).is_err() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-            debug_temporary_storage();
-
-            let data = BASE64URL.encode(message.as_bytes());
-            let header_str = format!("SCRAM handshakeToken={}, hash=SHA-256, data={}", client_handshake_token, &data);
-            let response = warp::reply::with_status("", http::StatusCode::from_u16(401).unwrap());
-            let response = warp::reply::with_header(response, "WWW-Authenticate", header_str);
-
-            return Ok(response);
+            return haystack_authentication_handle_first_message(&header, &salt);
         }
         else {
 
-            println!("second message");
-
-            // To begin with, the SCRAM client is in possession of a username and
-            // password (*) (or a ClientKey/ServerKey, or SaltedPassword).  It sends
-            // the username to the server, which retrieves the corresponding
-            // authentication information, i.e., a salt, StoredKey, ServerKey, and
-            // the iteration count i.  (Note that a server implementation may choose    
-            //     to use the same iteration count for all accounts.)  The server sends
-            //     the salt and the iteration count to the client, which then computes
-            //     the following values and sends a ClientProof to the server:
-             
-            //     (*) Note that both the username and the password MUST be encoded in
-            //     UTF-8 [RFC3629].
-             
-            //     Informative Note: Implementors are encouraged to create test cases
-            //     that use both usernames and passwords with non-ASCII codepoints.  In
-            //     particular, it's useful to test codepoints whose "Unicode
-            //     Normalization Form C" and "Unicode Normalization Form KC" are
-            //     different.  Some examples of such codepoints include Vulgar Fraction
-            //     One Half (U+00BD) and Acute Accent (U+00B4).
-             
-            //       SaltedPassword  := Hi(Normalize(password), salt, i)  ->  ring::pbkdf2::derive
-            //       ClientKey       := HMAC(SaltedPassword, "Client Key")  -> ring::hmac::sign
-            //       StoredKey       := H(ClientKey)    -> ring::digest::digest
-            //       AuthMessage     := client-first-message-bare + "," +
-            //                          server-first-message + "," +
-            //                          client-final-message-without-proof
-            //       ClientSignature := HMAC(StoredKey, AuthMessage)
-            //       ClientProof     := ClientKey XOR ClientSignature
-            //       ServerKey       := HMAC(SaltedPassword, "Server Key")
-            //       ServerSignature := HMAC(ServerKey, AuthMessage)
-             
-            //     The server authenticates the client by computing the ClientSignature,
-            //     exclusive-ORing that with the ClientProof to recover the ClientKey
-            //     and verifying the correctness of the ClientKey by applying the hash
-            //     function and comparing the result to the StoredKey.  If the ClientKey
-            //     is correct, this proves that the client has access to the user's
-            //     password.
-             
-            //     Similarly, the client authenticates the server by computing the
-            //     ServerSignature and comparing it to the value sent by the server.  If
-            //     the two are equal, it proves that the server had access to the user's
-            //     ServerKey.
-             
-            //     The AuthMessage is computed by concatenating messages from the
-            //     authentication exchange.
-
-            // The server verifies the nonce and the proof, verifies that the
-            // authorization identity (if supplied by the client in the first
-            // message) is authorized to act as the authentication identity, and,
-            // finally, it responds with a "server-final-message", concluding the
-            // authentication exchange.
-            //
-
-            // We should have server_salt and client_nonce from last message
-
-            let username_result = get_temporary_value(client_handshake_token.as_str(), "username");
-
-            if username_result.is_err() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-            let username_option = username_result.unwrap();
-
-            if username_option.is_none() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-            let username = username_option.unwrap();
-
-            //let data_store = store.read();
-
-            // let stored_server_salt_result = data_store.get_password_salt(&username).await;
-
-           // let stored_server_salt_result: Result<String, HaystackError> = Ok("hdfjgjd".to_string());
-
-            let stored_client_first_message_result = get_temporary_value(client_handshake_token.as_str(), "client_first_message");
-            let stored_server_first_message_result = get_temporary_value(client_handshake_token.as_str(), "server_first_message");
-            let stored_client_final_no_pf_result = get_temporary_value(client_handshake_token.as_str(), "client_final_no_pf");
-
-            if stored_client_first_message_result.is_err() || stored_server_first_message_result.is_err()
-              || stored_client_final_no_pf_result.is_err() {
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-          //  drop(stored_server_salt_result);
-
-            let stored_client_first_message_option = stored_client_first_message_result.unwrap();
-            let stored_server_first_message_option = stored_server_first_message_result.unwrap();
-            let stored_client_final_no_pf_option = stored_client_final_no_pf_result.unwrap();
-
-            if stored_client_first_message_option.is_none() || stored_server_first_message_option.is_none()
-              || stored_client_final_no_pf_option.is_none() {
-                debug!("No salt or nonce");
-                return Err(reject::custom(HayStackAuthRejection));
-            }
-
-            data = decode_scram_data(&data_str, BASE64).unwrap().1;
-
-            debug!("data: {:?}", data);
-
-            //let password: String = stringprep::saslprep("pencil").unwrap().to_string();
-
-            let auth_message: String = format!("{},{},{}", 
-                    &stored_client_first_message_option.unwrap().to_string(),
-                    &stored_server_first_message_option.unwrap().to_string(),
-                    &stored_client_final_no_pf_option.unwrap().to_string());
-
-            debug!("auth_message: {:?}", &auth_message.to_string());
-
-            //let salted_password_str = data_store.get_salted_password(&username).await.expect("unable to get salted password").to_string();
-            //let salted_password_str: String = "ddd".to_string();
-
-            debug!("salted_password: {:?}", &salted_password);
-
-            let salted_passwd = BASE64.decode(&salted_password.as_bytes()).expect("unable to decode base64");
-
-            debug!("salted_password hex: {:X?}", salted_passwd);
-
-            // var clientKey = hash("Client Key", saltedPassword);
-            // ClientKey       := HMAC(SaltedPassword, "Client Key")
-            let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
-            let signed_client_key = ring::hmac::sign(&key, "Client Key".as_bytes());
-
-            debug!("signed_client_key: {:X?}", signed_client_key);
-
-            // var storedKey = hash(clientKey);
-            // StoredKey       := H(ClientKey)
-            let stored_key = ring::digest::digest(&ring::digest::SHA256, signed_client_key.as_ref());
-            debug!("my_stored_key: {:X?}", stored_key);
-
-            let client_signature_key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, stored_key.as_ref());
-            let client_signature = ring::hmac::sign(&client_signature_key, auth_message.as_bytes());
-
-            debug!("client_signature: {:X?}", client_signature);
-
-            let client_proof_base64 = data.get("p").unwrap();
-
-            debug!("client_proof_base64: {:?}", client_proof_base64);    
-
-            let client_proof: Vec<u8> = BASE64.decode(client_proof_base64.as_bytes()).unwrap();
-
-            debug!("client_proof: {:x?}", client_proof);    
-
-            let client_key_computed: Vec<u8> = xor(&client_proof, client_signature.as_ref());
-
-            debug!("client_key_computed: {:x?}", client_key_computed);
-            debug!("signed_client_key: {:x?}", signed_client_key);
-
-           // drop(data_store);
-
-            if signed_client_key.as_ref() == client_key_computed {
-  
-                let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
-                let server_key = ring::hmac::sign(&key, "Server Key".as_bytes());
-
-                debug!("signed_client_key: {:X?}", server_key);
-
-                let server_signature_key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, server_key.as_ref());
-                let server_signature = ring::hmac::sign(&server_signature_key, auth_message.as_bytes());
-
-                debug!("server_signature: {:X?}", server_signature);
-
-                let server_signature_base64 = BASE64.encode(server_signature.as_ref());
-                debug!("server_signature_base64: {:X?}", server_signature_base64);
-
-                let data = format!("v={}", server_signature_base64);
-         
-                let auth_token = get_authtoken();
-
-                let message = format!("authToken={}, hash=SHA-256, data={}", auth_token, BASE64URL.encode(data.as_bytes()));
-
-                let response = warp::reply::with_status("Auth successful", http::StatusCode::from_u16(200).unwrap());
-                let response = warp::reply::with_header(response, "Authentication-Info", message);
-
-                // fn set_authtoken_username(authtoken: &str, username: &str) -> HaystackResult<()>
-
-                // fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<String>>
-
-
-                // if set_authtoken_username(&auth_token, ).is_err() {
-                //     return Err(reject::custom(HayStackAuthRejection));
-                // }
-
-                debug!("response: {:?}", response);
-
-                return Ok(response);
-            }
+            return haystack_authentication_handle_final_message(&header, &salted_password);
         }
     }
 
