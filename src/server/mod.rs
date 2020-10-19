@@ -433,21 +433,28 @@ pub fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<(String,
     Ok(Some((username, decoded.1)))
 }
 
-/// returns a password sha256 signed. 
-pub fn haystack_generate_salted_password(password: &str, salt: &[u8], iterations: u32) -> Vec<u8>
+pub fn haystack_sign_str(s: &str, salt: &[u8], iterations: u32) -> Vec<u8>
 {
-    let password_prep: String = stringprep::saslprep(password).unwrap().to_string();
+    let password_prep: String = stringprep::saslprep(s).unwrap().to_string();
     
     let PBKDF2_ALG: ring::pbkdf2::Algorithm = ring::pbkdf2::PBKDF2_HMAC_SHA256;
     const CREDENTIAL_LEN: usize = ring::digest::SHA256_OUTPUT_LEN;
     pub type Credential = [u8; CREDENTIAL_LEN];
     let pbkdf2_iterations: NonZeroU32 = NonZeroU32::new(iterations).unwrap();
 
-    let mut salted_passwd: Credential = [0u8; CREDENTIAL_LEN];
+    let mut signed_value: Credential = [0u8; CREDENTIAL_LEN];
     ring::pbkdf2::derive(PBKDF2_ALG, pbkdf2_iterations, &salt,
-        password_prep.as_bytes(), &mut salted_passwd);
+        password_prep.as_bytes(), &mut signed_value);
 
-    salted_passwd.to_vec()
+    signed_value.to_vec()
+}
+
+/// returns a password sha256 signed. 
+pub fn haystack_generate_salted_password(password: &str, salt: &[u8], iterations: u32) -> Vec<u8>
+{
+    let password_prep: String = stringprep::saslprep(password).unwrap().to_string();
+    
+    haystack_sign_str(&password_prep, salt, iterations)
 }
 
 #[derive(Debug)]
