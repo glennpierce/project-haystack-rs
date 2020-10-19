@@ -22,6 +22,8 @@ use crate::hval::{HVal};
 use crate::token::*;
 use crate::error::*;
 
+use serde::{Deserialize};
+
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 
 use nom::{
@@ -115,6 +117,11 @@ pub type BoxError = std::boxed::Box<dyn
 	+ std::marker::Sync // needed for threads
 >;
 
+fn jwt_token<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+    let allowed_chars: &str = "_-=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.";
+    is_a(allowed_chars)(i)
+}
+
 fn base64url_char<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     let allowed_chars: &str = "_-=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     is_a(allowed_chars)(i)
@@ -145,7 +152,7 @@ pub fn bearer<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)>
 
 pub fn auth_token<'a>(i: &'a str) -> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
 
-    preceded(bearer, separated_pair(tag_no_case("authToken"), char('='), base64url_char))(i)
+    preceded(bearer, separated_pair(tag_no_case("authToken"), char('='), jwt_token))(i)
 }
 
 pub fn nom_hello_username_string<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
@@ -360,6 +367,7 @@ lazy_static! {
     };
 }
 
+/*
 fn set_authtoken_username(username: &str) -> HaystackResult<String>
 {
     let random = get_hanshake_token();
@@ -431,6 +439,135 @@ pub fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<(String,
     }
 
     Ok(Some((username, decoded.1)))
+}
+
+*/
+
+#[derive(Deserialize, Debug)]
+struct Payload {
+    iss: String,
+    exp: u64,
+    admin: bool,
+    username: String,
+}
+
+fn get_jwt_hanshake_token_for_username(username: &str) -> String {
+
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+
+    let expire = since_the_epoch.as_secs() + (60 * 60);
+
+    let header = "{\"alg\": \"HS256\", \"typ\": \"JWS\"}".to_string();
+    let payload = format!("{{\"iss\": \"carnego\", \"username\": \"{}\", \"exp\": {}, \"admin\": false}}", &username, expire);
+
+    println!("header: {}", &header);
+    println!("payload: {}", &payload);
+
+    let encoded_header = BASE64URL.encode(header.as_bytes());
+    let encoded_payload = BASE64URL.encode(payload.as_bytes());
+
+    let concatenated = format!("{}.{}", &encoded_header, &encoded_payload);
+
+    let singed_signature = haystack_sign_str(&concatenated, "PhdHGS5jxHj9fJgjdyv792bH390hiKHOAutagi2Emfd5".as_bytes(), 5000);
+
+    let encoded_signature = BASE64URL.encode(&singed_signature.to_vec());
+
+    let s = format!("{}.{}.{}", encoded_header, encoded_payload, &encoded_signature);
+
+    s
+}
+
+fn set_authtoken_username(username: &str) -> HaystackResult<String>
+{
+    let token = get_jwt_hanshake_token_for_username(username);
+
+    let mut tmp = AUTHTOKEN_STORAGE.lock().unwrap();
+    tmp.entry(token.to_string()).and_modify(|e| { *e = username.to_string() }).or_insert(username.to_string());
+    drop(tmp);
+
+    Ok(token)
+}
+
+fn byte_decode_jwt_part(part: &str) -> HaystackResult<Vec<u8>> {
+
+    let decoded_result = BASE64URL.decode(&part.as_bytes());
+
+    if decoded_result.is_err() {
+        return Err(HaystackError::AuthError);
+    }
+
+    Ok(decoded_result.unwrap())
+}
+
+fn byte_decode_jwt_part_str(part: &str) -> HaystackResult<String> {
+
+    let decoded = byte_decode_jwt_part(part)?;
+
+    let decoded_str_result = str::from_utf8(&decoded);
+
+    if decoded_str_result.is_err() {
+        return Err(HaystackError::AuthError);
+    }
+
+    Ok(decoded_str_result.unwrap().to_string())
+}
+
+fn decode_jwt_hanshake_token(token: &str) -> HaystackResult<(String, u64)> {
+    
+    let parts: Vec<&str> = token.split(".").collect();
+
+    if parts.len() != 3 {
+        return Err(HaystackError::AuthError);
+    }
+
+    let concatenated = format!("{}.{}", &parts[0], &parts[1]);
+
+    let header = byte_decode_jwt_part_str(parts[0])?;
+    let payload = byte_decode_jwt_part_str(parts[1])?;
+
+    println!("{}", payload);
+
+    let signed_signature = haystack_sign_str(&concatenated, "PhdHGS5jxHj9fJgjdyv792bH390hiKHOAutagi2Emfd5".as_bytes(), 5000);
+
+    let signature = byte_decode_jwt_part(parts[2])?;
+
+    // Need to verify signature
+    if signed_signature != signature {
+        return Err(HaystackError::AuthError);
+    }
+
+    let payload_result: Result<Payload, serde_json::Error> = serde_json::from_str(&payload);
+
+    if payload_result.is_err() {
+        return Err(HaystackError::AuthError);
+    }
+
+    let p = payload_result.unwrap();
+  
+    Ok((p.username, p.exp))
+}
+
+pub fn get_authtoken_username(authtoken: &str) -> HaystackResult<Option<(String, u64)>>
+{
+    let tmp = AUTHTOKEN_STORAGE.lock().unwrap();
+    let username_option = tmp.get(authtoken);
+
+    if username_option.is_none() {
+        return Err(HaystackError::AuthError);
+    }
+
+    let username = username_option.unwrap().to_string();
+
+    let (decoded_username, expire) = decode_jwt_hanshake_token(authtoken)?;
+
+    if username != decoded_username {
+        return Err(HaystackError::AuthError);
+    }
+
+    Ok(Some((username, expire)))
 }
 
 pub fn haystack_sign_str(s: &str, salt: &[u8], iterations: u32) -> Vec<u8>
@@ -1349,5 +1486,15 @@ mod tests {
 
        println!("{:?}", nom_scram_first_message("scram handshakeToken=aabbbcc,data=biwsbj11c2VyLHI9VCthZFF4bTlGTTVmU3k0NnR0SFZEK0ov"));
 
+    }
+
+    #[test]
+    fn jwt_generate_test() {
+
+        let token = get_jwt_hanshake_token_for_username("glennpierce");
+
+        println!("token: {}", token);
+
+        println!("token decoded: {:?}", decode_jwt_hanshake_token(&token));
     }
 }

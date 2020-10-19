@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 futures = "*"
+serde_json = "*"
 downcast-rs = "*"
 async-trait = "0.1.41"
 bytes = "*"
