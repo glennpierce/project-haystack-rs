@@ -9,8 +9,8 @@ name = "libproject_haystack_rs"
 path = "src/lib.rs"
 
 [dependencies]
-futures = "*"
-serde_json = "*"
+futures = "0.3.5"
+serde_json = "1.0.56"
 downcast-rs = "*"
 async-trait = "0.1.41"
 bytes = "*"
@@ -21,7 +21,7 @@ stringprep = "*"
 rand = "0.6.5"
 data-encoding = "*"
 parking_lot = "*"
-http = "*"
+http = "0.2.1"
 serde = { version = "1.0.100", features = ["derive"] }
 lazy_static = "*"
 chrono = { version = "0.4" }
