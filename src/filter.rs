@@ -563,6 +563,9 @@ mod tests {
                  (token_ref!("10"), None),
                  (token_ref!("11"), None)]]);
 
+
+        assert_eq!(filter_tokens!(filter_eval_str("dis == \"Six\"", &values)), refs!("6"));
+
         assert_eq!(filter_tokens!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &values)), refs!("3"));
 
         assert_eq!(filter_tokens!(filter_eval_str("geoCity == \"Chicago\"", &values)), refs!("1"));

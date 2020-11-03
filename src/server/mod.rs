@@ -1488,13 +1488,13 @@ mod tests {
 
     }
 
-    #[test]
-    fn jwt_generate_test() {
+    // #[test]
+    // fn jwt_generate_test() {
 
-        let token = get_jwt_hanshake_token_for_username("glennpierce");
+    //     let token = get_jwt_hanshake_token_for_username("glennpierce");
 
-        println!("token: {}", token);
+    //     println!("token: {}", token);
 
-        println!("token decoded: {:?}", decode_jwt_hanshake_token(&token));
-    }
+    //     println!("token decoded: {:?}", decode_jwt_hanshake_token(&token));
+    // }
 }
