@@ -713,6 +713,32 @@ pub fn haystack_authentication_handle_final_message(header: &str, salted_passwor
 
     let client_final_no_pf = &parts[0].to_string();
 
+    //     o  Normalize(str): Apply the SASLprep profile [RFC4013] of the
+    //       "stringprep" algorithm [RFC3454] as the normalization algorithm to
+    //       a UTF-8 [RFC3629] encoded "str".  The resulting string is also in
+    //       UTF-8.  When applying SASLprep, "str" is treated as a "stored
+    //       strings", which means that unassigned Unicode codepoints are
+    //       prohibited (see Section 7 of [RFC3454]).  Note that
+    //       implementations MUST either implement SASLprep or disallow use of
+    //       non US-ASCII Unicode codepoints in "str".
+
+    //    o  HMAC(key, str): Apply the HMAC keyed hash algorithm (defined in
+    //       [RFC2104]) using the octet string represented by "key" as the key
+    //       and the octet string "str" as the input string.  The size of the
+    //       result is the hash result size for the hash function in use.  For
+    //       example, it is 20 octets for SHA-1 (see [RFC3174]).
+
+    // o  H(str): Apply the cryptographic hash function to the octet string
+    //       "str", producing an octet string as a result.  The size of the
+    //       result depends on the hash result size for the hash function in
+    //       use.
+
+    //    o  XOR: Apply the exclusive-or operation to combine the octet string
+    //       on the left of this operator with the octet string on the right of
+    //       this operator.  The length of the output and each of the two
+    //       inputs will be the same for this use.
+
+
     // To begin with, the SCRAM client is in possession of a username and
     // password (*) (or a ClientKey/ServerKey, or SaltedPassword).  It sends
     // the username to the server, which retrieves the corresponding
@@ -1497,4 +1523,47 @@ mod tests {
 
     //     println!("token decoded: {:?}", decode_jwt_hanshake_token(&token));
     // }
+
+
+    #[test]
+    fn hmac_sha_256_test() {
+
+        use super::*;
+
+        let salted_passwd = BASE64.decode("UkzCgkNWAcO5wpcBwpPCmi7DksOhwodtw59odWluKcOPw4Qgwo8jwqDDlSHCoMKn".as_bytes()).expect("unable to decode base64");
+
+        let expected_hex = "524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7";
+        let salted_passwd: Vec<u8> = ring::test::from_hex(expected_hex).unwrap();
+
+        // 524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7
+        // 524cc282435601c3b9c29701c293c29a2ec392c3a1c2876dc39f6875696e29c38fc38420c28f23c2a0c39521c2a0c2a7
+
+        println!("salted_password hex: {:X?}", salted_passwd);
+
+        // clientKey       := "Client Key".toBuf.hmac("SHA-256", saltedPassword)
+
+        // clientKey utf8: 11c2b407c3af4f01534a13c28ac285c299545dc383c38943535dc2acc295477d7f1334c3bec3885408197c
+        // client key latin: 11b407ef4f01534a138a8599545dc3c943535dac95477d7f1334fec85408197c
+
+
+        // let signed_client_key = haystack_sign_str("Client Key", &salted_passwd, 1);
+
+
+
+        let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
+        let signed_client_key = ring::hmac::sign(&key, "Client Key".as_bytes());
+
+        println!("signed_client_key: {:X?}", signed_client_key);
+
+        // e487dc1bae8e05ca0b4abaa4a02005f8a2f8900b0d7df6d3c48c3ed80654e61d
+
+        //let stored_key = ring::digest::digest(&ring::digest::SHA256, &salted_passwd);
+        //println!("my_stored_key: {:X?}", stored_key);
+
+        // let expected_hex = "524cc282435601c3b9c29701c293c29a2ec392c3a1c2876dc39f6875696e29c38fc38420c28f23c2a0c39521c2a0c2a7";
+        // let expected: Vec<u8> = test::from_hex(expected_hex).unwrap();
+        // let actual = digest::digest(&digest::SHA256, b"hello, world");
+
+
+    }
 }
