@@ -1530,40 +1530,36 @@ mod tests {
 
         use super::*;
 
-        let salted_passwd = BASE64.decode("UkzCgkNWAcO5wpcBwpPCmi7DksOhwodtw59odWluKcOPw4Qgwo8jwqDDlSHCoMKn".as_bytes()).expect("unable to decode base64");
-
         let expected_hex = "524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7";
-        let salted_passwd: Vec<u8> = ring::test::from_hex(expected_hex).unwrap();
+        let key_value: Vec<u8> = ring::test::from_hex(expected_hex).unwrap();
 
-        // 524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7
-        // 524cc282435601c3b9c29701c293c29a2ec392c3a1c2876dc39f6875696e29c38fc38420c28f23c2a0c39521c2a0c2a7
+        println!("salted_password hex: {:X?}", &key_value);
 
-        println!("salted_password hex: {:X?}", salted_passwd);
-
-        // clientKey       := "Client Key".toBuf.hmac("SHA-256", saltedPassword)
-
-        // clientKey utf8: 11c2b407c3af4f01534a13c28ac285c299545dc383c38943535dc2acc295477d7f1334c3bec3885408197c
-        // client key latin: 11b407ef4f01534a138a8599545dc3c943535dac95477d7f1334fec85408197c
-
-
-        // let signed_client_key = haystack_sign_str("Client Key", &salted_passwd, 1);
-
-
-
-        let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &salted_passwd);
+        let key: ring::hmac::Key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key_value.as_ref());
         let signed_client_key = ring::hmac::sign(&key, "Client Key".as_bytes());
 
         println!("signed_client_key: {:X?}", signed_client_key);
 
-        // e487dc1bae8e05ca0b4abaa4a02005f8a2f8900b0d7df6d3c48c3ed80654e61d
-
-        //let stored_key = ring::digest::digest(&ring::digest::SHA256, &salted_passwd);
-        //println!("my_stored_key: {:X?}", stored_key);
-
-        // let expected_hex = "524cc282435601c3b9c29701c293c29a2ec392c3a1c2876dc39f6875696e29c38fc38420c28f23c2a0c39521c2a0c2a7";
-        // let expected: Vec<u8> = test::from_hex(expected_hex).unwrap();
-        // let actual = digest::digest(&digest::SHA256, b"hello, world");
 
 
+        let signed_client_key_encoded = BASE64.encode(signed_client_key.as_ref());
+
+        println!("signed_client_key_encoded: {:X?}", signed_client_key_encoded);
+
+        let actual = ring::digest::digest(&ring::digest::SHA256, signed_client_key.as_ref());
+        println!("actual: {:X?}", actual);
     }
 }
+
+
+// import hashlib
+// import hmac
+// import base64
+// message = bytes('Client Key', 'utf-8')
+// #secret = bytes('524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7', 'utf-8')
+// secret = bytes.fromhex('524c82435601f99701939a2ed2e1876ddf6875696e29cfc4208f23a0d521a0a7')
+
+// signature = hmac.new(secret, message, digestmod=hashlib.sha256).digest()
+// print(signature.hex())
+// signature_encoded = base64.b64encode(signature)
+// print(signature_encoded)
