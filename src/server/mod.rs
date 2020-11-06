@@ -1563,3 +1563,4 @@ mod tests {
 // print(signature.hex())
 // signature_encoded = base64.b64encode(signature)
 // print(signature_encoded)
+// print(hashlib.sha256(signature).hexdigest())
