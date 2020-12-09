@@ -389,6 +389,8 @@ pub async fn haystack_authentication(header: String, store: Store) -> Result<imp
         let response = warp::reply::with_header(response, "WWW-Authenticate", &format!("SCRAM hash=SHA-256, handshakeToken={}",
             handshaken_token));
 
+        info!("{:?}", response);
+
         return Ok(response);
     }
     else if header.to_lowercase().contains("scram") {
