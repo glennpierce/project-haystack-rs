@@ -503,10 +503,13 @@ mod tests {
 
         let values: RefTags = get_tags();
 
+        // Get all tags with a siteRef
         assert_eq!(filter_tokens!(filter_eval_str("siteRef", &values)), refs!("3", "5", "6", "10"));
 
+        // Get all tags with a siteRef where that siteRef has a dis tag
         assert_eq!(filter_tokens!(filter_eval_str("siteRef->dis", &values)), refs!("3", "5", "6", "10"));
 
+        // Get all tags with a siteRef where that siteRef has a heat tag
         assert_eq!(filter_tokens!(filter_eval_str("siteRef->heat", &values)), refs!("3", "6"));
 
         // Needs to fail
@@ -562,6 +565,9 @@ mod tests {
                  (token_ref!("9"), None),
                  (token_ref!("10"), None),
                  (token_ref!("11"), None)]]);
+
+
+        assert_eq!(filter_tokens!(filter_eval_str("dis == \"Six\"", &values)), refs!("6"));
 
         assert_eq!(filter_tokens!(filter_eval_str("elec and siteRef->geoCity == \"Chicago\"", &values)), refs!("3"));
 

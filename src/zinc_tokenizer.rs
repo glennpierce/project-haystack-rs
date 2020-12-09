@@ -2,7 +2,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{is_a, tag},
-    character::complete::{alphanumeric1, char, digit1, multispace0, multispace1, newline, one_of, space0},
+    character::complete::{alphanumeric1, char, digit1, multispace0, multispace1, newline, one_of, space0, space1},
     combinator::{complete, map, opt, peek, recognize},
     error::ErrorKind,
     multi::{many1, separated_list},
@@ -13,6 +13,40 @@ use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveTime, NaiveDateTime, Ti
 
 use crate::hval::HVal;
 use crate::token::*;
+
+/// let parser = delimited(tag("abc"), tag("|"), tag("efg"));
+///
+/// assert_eq!(parser("abc|efg"), Ok(("", "|")));
+/// assert_eq!(parser("abc|efghij"), Ok(("hij", "|")));
+/// assert_eq!(parser(""), Err(Err::Error(("", ErrorKind::Tag))));
+/// assert_eq!(parser("123"), Err(Err::Error(("123", ErrorKind::Tag))));
+/// ```
+// pub fn space_after<I, O1, O2, O3, E: ParseError<I>, F, G, H>(first: F, sep: G, second: H) -> impl Fn(I) -> IResult<I, O2, E>
+// where
+//   F: Fn(I) -> IResult<I, O1, E>,
+//   G: Fn(I) -> IResult<I, O2, E>,
+//   H: Fn(I) -> IResult<I, O3, E>,
+// {
+//   move |input: I| {
+//     let (input, _) = first(input)?;
+//     let (input, o2) = sep(input)?;
+//     second(input).map(|(i, _)| (i, o2))
+//   }
+// }
+
+// fn space_after<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
+// where
+//     F: Fn(I) -> IResult<I, O, E>,
+//     I: nom::InputTakeAtPosition,
+//     <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
+//     E: nom::error::ParseError<I>,
+// {
+//       move |input: I| {
+//             let (input, _) = f(input)?;
+//             let (input, o2) = sep(input)?;
+//             second(input).map(|(i, _)| (i, o2))
+//       }
+// }
 
 fn spacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
 where
@@ -522,7 +556,7 @@ fn zinc_tag<'a>(i: &'a str) -> IResult<&'a str, Tag, (&'a str, ErrorKind)> {
 // id:@hisId projName:"test"
 fn tags<'a>(i: &'a str) -> IResult<&'a str, Tags, (&'a str, ErrorKind)> {
     //terminated(separated_list(char(' '), scalar), opt(tag(",")))(i)
-    map(separated_list(char(' '), zinc_tag), |t: Vec<Tag>| {
+    map(separated_list(space1, zinc_tag), |t: Vec<Tag>| {
         Tags::new(&t)
     })(i)
 }
@@ -553,7 +587,7 @@ fn tags<'a>(i: &'a str) -> IResult<&'a str, Tags, (&'a str, ErrorKind)> {
 // dict(r#""{dis:"Dict!" foo}"#)
 fn dict<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     map(
-        delimited(spacey(tag("{")), tags, spacey(tag("}"))),
+        delimited(tuple((tag("{"), multispace0)), tags, tuple((multispace0, tag("}")))),
         |tags: Tags| {
             // Box::new(Val::new(t.clone())) as Box<dyn HVal>
             Val::new(Box::new(Dict::new_from_tags(&tags)) as Box<dyn HVal>)
@@ -568,7 +602,7 @@ fn list_of_vals<'a>(i: &'a str) -> IResult<&'a str, Vec<Val>, (&'a str, ErrorKin
 fn list<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     //delimited(spacey(tag("[")), list_of_vals, spacey(tag("]")))(i)
     map(
-        delimited(spacey(tag("[")), list_of_vals, spacey(tag("]"))),
+        delimited(tuple((tag("["), multispace0)), list_of_vals, tuple((multispace0, tag("]")))),
         |v: Vec<Val>| {
             //let tmp: Vec<Box<Token>> = v.into_iter().map(|x| Box::new(x)).collect();
             Val::new(Box::new(List::new(v)) as Box<dyn HVal>)
@@ -919,6 +953,7 @@ mod tests {
         println!("tags {:?}", tags(r#"ids:@hisId"#));
         println!("tags {:?}", tags(r#"ids:[9,8,9,3]"#));
         println!("tags {:?}", tags(r#"ids:[@hisId1,@hisId2,@hisId3]"#));
+        println!("tags {:?}", tags("id:[@619261,@619262] action:\"tags\"")); 
     }
 
     #[test]
@@ -1076,6 +1111,10 @@ mod tests {
         assert_nom_fn_eq!(
             grid_meta("ver:\"3.0\" id:@hisId\n"),
             r#"Ok(("\n", GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@hisId", None)))]))))"#
+        );
+        assert_nom_fn_eq!(
+            grid_meta("ver:\"3.0\" id:[@619261,@619262] action:\"tags\"\n"),
+            r#"Ok(("\n", GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(List([Ref("@619261", None), Ref("@619262", None)]))), Tag(Id("action"), Some(EscapedString("tags")))]))))"#
         );
     }
 

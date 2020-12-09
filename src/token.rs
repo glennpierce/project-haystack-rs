@@ -230,7 +230,7 @@ impl fmt::Display for Token {
 
             Token::DateTime(val) => {
                 let utc: DateTime<Utc> = val.with_timezone(&Utc);
-                write!(f, "{}", utc.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
+                write!(f, "{}", utc.format("%Y-%m-%dT%H:%M:%S%.3f %Z").to_string())
             }
             
             Token::Uri(val) => write!(f, "{}", val),
@@ -284,7 +284,7 @@ impl HVal for Token {
                 // DateTime: 2010-03-11T23:55:00-05:00 New_York or 2009-11-09T15:39:00Z
                 // Haystack-rs always returns in Utc
                 let utc: DateTime<Utc> = val.with_timezone(&Utc);
-                return format!("{}", utc.format("%Y-%m-%dT%H:%M:%S%.3fZ"))
+                return format!("{}", utc.format("%Y-%m-%dT%H:%M:%S%.3f %Z"))
             }
             
             Token::Uri(val) => format!("`{}`", val),
