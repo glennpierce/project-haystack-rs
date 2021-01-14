@@ -333,6 +333,16 @@ fn range_lastfiveminutes<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'
     )(i)
 }
 
+fn range_lasthour<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
+    map(tag("lasthour"), |_: &str| {
+        (
+            Token::DateTime(DateTime::<FixedOffset>::from(Utc::now() - chrono::Duration::minutes(60))),
+            Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))
+        )
+        }
+    )(i)
+}
+
 fn range_today<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (&'a str, ErrorKind)> {
     map(tag("today"), |_: &str| (Token::DateTime(utc_date_floor(Utc::today())), Token::DateTime(DateTime::<FixedOffset>::from(Utc::now()))))(i)
 }
@@ -387,6 +397,7 @@ pub fn date_range_to_token<'a>(i: &'a str) -> IResult<&'a str, (Token, Token), (
         range_thismonth,
         range_thisyear,
         range_lastfiveminutes,
+        range_lasthour,
         datetime_range,
         map(datetime_s, |s: &str| (str_to_datetime_token(s), Token::DateTime(DateTime::<FixedOffset>::from(Utc::now())))),
         date_range,
