@@ -463,6 +463,15 @@ mod tests {
     }
 
     #[test]
+    fn test_rpn() {
+
+        let tokens = tokenize("elec and siteRef->geoCity == \"Chicago\"").unwrap();
+        let rpn = to_rpn(&tokens).unwrap();
+
+        println!("{:?}", rpn);
+    }
+    
+    #[test]
     fn test_eval() {
 
         // In the real world the idea is to get all the refs with tags from a db or whatever.
