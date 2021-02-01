@@ -1322,8 +1322,34 @@ mod tests {
             ),
             r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("id"), Some([])), Col(Id("range"), Some([]))]), Rows([Row([Ref("@someTemp", None), EscapedString("2012-10-01,2012-10-03")])]))"#
         );
+    }
 
+    #[test]
+    fn grid_read_test() {
+        use super::*;
 
+        let s = "ver:\"3.0\"\nfilter\n\"carnego_campus == \\\"bryn_bragl\\\"\"\n";
+
+        println!("s: {}", s);
+
+        assert_nom_fn_eq_no_remain_check!(
+            grid(s),
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("filter"), Some([]))]), Rows([Row([EscapedString("carnego_campus == \"bryn_bragl\"")])]))"#
+        );
+    }
+
+    #[test]
+    fn grid_read_rows_test() {
+        use super::*;
+
+        let s = "\"carnego_campus == \\\"bryn_bragl\\\"\"\n";
+
+        println!("s: {}", s);
+
+        assert_nom_fn_eq_no_remain_check!(
+            rows(s),
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("id"), Some([])), Col(Id("range"), Some([]))]), Rows([Row([Ref("@someTemp", None), EscapedString("2012-10-01,2012-10-03")])]))"#
+        );
     }
 
     #[test]
