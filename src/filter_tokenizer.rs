@@ -191,6 +191,11 @@ fn term<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     alt((cmp, not, path))(i)
 }
 
+fn term2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    alt((not, path))(i)
+}
+
 // fn filter<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     
 //     separated_pair(term, and_or, term),
@@ -279,6 +284,15 @@ fn lexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> 
     )(i)
 }
 
+fn lexpr2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    delimited(
+          multispace0,
+          alt((lparen, term2)),
+          multispace0
+    )(i)
+}
+
 fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
     delimited(
@@ -344,7 +358,7 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
                     FilterToken::RParen => {
                         paren_stack.pop().expect("The paren_stack is empty!");
                     }
-                    FilterToken::Val(_) | FilterToken::Path(_) |  FilterToken::Compare(_, _, _) => {
+                    FilterToken::Val(_) | FilterToken::Path(_) | FilterToken::Compare(_, _, _) => {
                         state = TokenizerState::AfterRExpr;
                     }
                     FilterToken::Binary(_) => {
@@ -396,6 +410,89 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 
 }
 
+
+pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> {
+    let mut state: TokenizerState = TokenizerState::LExpr;
+    // number of function arguments left
+    let mut paren_stack = vec![];
+
+    let mut res = vec![];
+
+    let mut s = input;
+
+    while !s.is_empty() {
+
+        // println!("s: {:?},   state: {:?}", s, state);
+
+        let r = match (state, paren_stack.last()) {
+            (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren(s),
+            (TokenizerState::AfterRExpr, Some(&ParenState::Subexpr)) => after_rexpr(s),
+            (TokenizerState::LExpr, _) => lexpr2(s),
+        };
+
+        // println!("r: {:?}", r);
+
+        match r {
+            Ok((rest, t)) => {
+
+                match t {
+                    FilterToken::LParen => {
+                        paren_stack.push(ParenState::Subexpr);
+                    }
+                    FilterToken::RParen => {
+                        paren_stack.pop().expect("The paren_stack is empty!");
+                    }
+                    FilterToken::Val(_) | FilterToken::Path(_) | FilterToken::Compare(_, _, _) => {
+                        state = TokenizerState::AfterRExpr;
+                    }
+                    FilterToken::Binary(_) => {
+                        state = TokenizerState::LExpr;
+                    }
+                    _ => {}
+                }
+                res.push(t);
+                s = rest;
+            }
+            Err(e) => {
+        
+                //match e {
+                //    Err::Error((value, _)) => {
+               //         return Err(FilterTokenParseError::UnexpectedStrToken(value.to_string()));
+                //    },
+                //    _ => (),
+              //  }
+
+                println!("Tokenize {:?}", e);
+
+                return Err(FilterTokenParseError::UnknownFilterTokenParseError);
+            }
+            // Error(Err::Position(_, p)) => {
+            //     let (i, _) = slice_to_offsets(input, p);
+            //     return Err(FilterTokenParseError::UnexpectedToken(i));
+            // }
+            // _ => {
+            //     panic!("Unexpected parse result when parsing `{}` at `{}`: {:?}", input, s, r);
+            // }
+        }
+
+    }
+
+    match state {
+        TokenizerState::LExpr => {
+            Err(FilterTokenParseError::MissingArgument)
+        },
+
+        _ => {
+            if !paren_stack.is_empty() {
+                return Err(FilterTokenParseError::MissingRParen(paren_stack.len() as i32));
+            }
+
+            return Ok(res);
+        }
+    }
+
+
+}
 
 #[cfg(test)]
 mod tests {
@@ -560,6 +657,28 @@ mod tests {
         //     Binary(Has),
         //     FilterToken::Name("dis".to_string()),
         // ]));
+
+    }
+
+    #[test]
+    fn test_tokenize2() {
+        use super::Operation::*;
+        use super::FilterToken::*;
+
+        assert_eq!(tokenize2("equip and siteRef->geoCity->dis == \"Chicago\""), Ok(
+            vec![
+                id_to_path!("equip"),
+                Binary(And),
+
+                Compare(
+                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
+                        Operation::Equals,
+                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
+                    )
+            ]
+        ));
+
+      
 
     }
 }

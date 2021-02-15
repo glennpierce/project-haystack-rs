@@ -466,6 +466,9 @@ mod tests {
     fn test_rpn() {
 
         let tokens = tokenize("elec and siteRef->geoCity == \"Chicago\"").unwrap();
+
+        println!("tokens {:?}", tokens);
+
         let rpn = to_rpn(&tokens).unwrap();
 
         println!("{:?}", rpn);
