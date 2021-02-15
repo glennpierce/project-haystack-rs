@@ -87,7 +87,24 @@ fn name_path<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKin
     )(i)
 }
 
+fn name_path2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    map( 
+        zinc_id, |t: Token| { FilterToken::Path(vec![t]) }
+    )(i)
+}
+
 fn name_path_list<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    map( 
+        separated_list(tag("->"), zinc_id), 
+            |v: Vec<Token>| 
+                { 
+                    let tmp: Vec<Token> = v.iter().map(|i| i.clone()).collect();
+                    FilterToken::Path(tmp)
+                }
+    )(i)
+}
+
+fn name_path_list2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     map( 
         separated_list(tag("->"), zinc_id), 
             |v: Vec<Token>| 
@@ -100,6 +117,10 @@ fn name_path_list<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, Err
 
 fn path<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     alt(( name_path_list, name_path ) ) (i)
+}
+
+fn path2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    alt(( name_path_list2, name_path2 ) ) (i)
 }
 
 // fn cmp_op<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
@@ -193,7 +214,7 @@ fn term<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
 fn term2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    alt((not, path))(i)
+    alt((not, path2))(i)
 }
 
 // fn filter<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
@@ -644,7 +665,7 @@ mod tests {
             ]
         ));
 
-        println!("{:?}", tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"));
+        // println!("{:?}", tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"));
 
         // assert_eq!(tokenize("equip and \"Chicago\" == siteRef->geoCity->dis"), Ok(vec![
         //     FilterToken::Name("equip".to_string()),
@@ -661,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tokenize2() {
+    fn test_twootokenize2() {
         use super::Operation::*;
         use super::FilterToken::*;
 
@@ -677,8 +698,42 @@ mod tests {
                     )
             ]
         ));
+    }
 
-      
+    #[test]
+    fn basic_tests2() {
+
+        use super::FilterToken::*;
+
+        assert_eq!(
+            path2("siteRef->cityName->houseName"),
+            Ok(("", FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("cityName"), id_to_token!("houseName")])))
+        );
+        assert_eq!(
+            path("siteRef"),
+            Ok(("", FilterToken::Path(vec![id_to_token!("siteRef")])))
+        );
+        assert_eq!(
+            path("siteRef->geoCity->dis"),
+            Ok(("", FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])))
+        );
+    }
+
+    #[test]
+    fn test_lexpr2() {
+
+        // and can't be at from so should be interpreted as name
+        assert_eq!(
+            lexpr("equip and siteRef->geoCity->dis == \"Chicago\""),
+            Ok(("and siteRef->geoCity->dis == \"Chicago\"", FilterToken::Path(vec![id_to_token!("equip")])))
+        );
+
+        assert_eq!(
+            lexpr2("equip and siteRef->geoCity->dis == \"Chicago\""),
+            Ok(("and siteRef->geoCity->dis == \"Chicago\"", FilterToken::Path(vec![id_to_token!("equip")])))
+        );
+
+        println!("{:?}", lexpr("(heat or water)"));
 
     }
 }
