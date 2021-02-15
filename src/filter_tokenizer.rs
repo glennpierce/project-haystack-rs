@@ -744,6 +744,16 @@ mod tests {
                 id_to_path!("heat"),
             ]
         ));
+
+        assert_eq!(tokenize2("\"Chicago\" == siteRef->dis or heat"), Ok(
+            vec![
+                Val(Token::EscapedString("Chicago".to_string())),
+                Binary(Equals),
+                Path([id_to_token!("siteRef"), id_to_token!("dis")].to_vec()),
+                Binary(Or),
+                id_to_path!("heat"),
+            ]
+        ));
     }
 
     #[test]
