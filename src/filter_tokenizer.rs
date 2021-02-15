@@ -187,6 +187,15 @@ fn cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     )(i)
 }
 
+fn cmp2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    map(multispacey(cmp_op), 
+        |t| {
+            FilterToken::Binary(t)
+        }
+    )(i)
+}
+
 fn and<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
     map(tag("and"), |o: &str| { FilterToken::Binary(Operation::And)})(i)
@@ -200,6 +209,11 @@ fn or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 fn and_or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     
     alt((and, or))(i)
+}
+
+fn and_or_cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    
+    alt((cmp2, and, or))(i)
 }
 
 fn not<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
@@ -309,7 +323,7 @@ fn lexpr2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)>
 
     delimited(
           multispace0,
-          alt((lparen, term2)),
+          alt((lparen, filter_val, term2)),
           multispace0
     )(i)
 }
@@ -323,9 +337,22 @@ fn after_rexpr<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorK
     )(i)
 }
 
+fn after_rexpr2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+    delimited(
+          multispace0,
+          alt((cmp2, and_or, filter_val, rparen)),
+          multispace0
+    )(i)
+}
+
 fn after_rexpr_no_paren<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
     delimited(multispace0, and_or, multispace0)(i)
+}
+
+fn after_rexpr_no_paren2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+    delimited(multispace0, alt((cmp2, and, or, filter_val)), multispace0)(i)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -443,15 +470,15 @@ pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError>
 
     while !s.is_empty() {
 
-        // println!("s: {:?},   state: {:?}", s, state);
+        println!("s: {:?},  state: {:?}  paren_stack: {:?}", s, state, paren_stack);
 
         let r = match (state, paren_stack.last()) {
-            (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren(s),
-            (TokenizerState::AfterRExpr, Some(&ParenState::Subexpr)) => after_rexpr(s),
+            (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren2(s),
+            (TokenizerState::AfterRExpr, Some(&ParenState::Subexpr)) => after_rexpr2(s),
             (TokenizerState::LExpr, _) => lexpr2(s),
         };
 
-        // println!("r: {:?}", r);
+        println!("r: {:?}", r);
 
         match r {
             Ok((rest, t)) => {
@@ -463,7 +490,7 @@ pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError>
                     FilterToken::RParen => {
                         paren_stack.pop().expect("The paren_stack is empty!");
                     }
-                    FilterToken::Val(_) | FilterToken::Path(_) | FilterToken::Compare(_, _, _) => {
+                    FilterToken::Val(_) | FilterToken::Path(_) => {
                         state = TokenizerState::AfterRExpr;
                     }
                     FilterToken::Binary(_) => {
@@ -685,17 +712,36 @@ mod tests {
     fn test_twootokenize2() {
         use super::Operation::*;
         use super::FilterToken::*;
+        use super::Token;
 
         assert_eq!(tokenize2("equip and siteRef->geoCity->dis == \"Chicago\""), Ok(
             vec![
                 id_to_path!("equip"),
                 Binary(And),
+                Path([id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")].to_vec()),
+                Binary(Equals),
+                Val(Token::EscapedString("Chicago".to_string()))
+            ]
+        ));
 
-                Compare(
-                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
-                        Operation::Equals,
-                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
-                    )
+        assert_eq!(tokenize2("equip or siteRef->dis == \"Chicago\""), Ok(
+            vec![
+                id_to_path!("equip"),
+                Binary(Or),
+                Path([id_to_token!("siteRef"), id_to_token!("dis")].to_vec()),
+                Binary(Equals),
+                Val(Token::EscapedString("Chicago".to_string()))
+            ]
+        ));
+
+
+        assert_eq!(tokenize2("siteRef->dis != \"Chicago\" or heat"), Ok(
+            vec![
+                Path([id_to_token!("siteRef"), id_to_token!("dis")].to_vec()),
+                Binary(NotEquals),
+                Val(Token::EscapedString("Chicago".to_string())),
+                Binary(Or),
+                id_to_path!("heat"),
             ]
         ));
     }
@@ -733,7 +779,7 @@ mod tests {
             Ok(("and siteRef->geoCity->dis == \"Chicago\"", FilterToken::Path(vec![id_to_token!("equip")])))
         );
 
-        println!("{:?}", lexpr("(heat or water)"));
+        println!("{:?}", lexpr2("equip and siteRef->geoCity->dis == \"Chicago\""));
 
     }
 }
