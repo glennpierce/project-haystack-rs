@@ -710,10 +710,18 @@ mod tests {
     }
 
     #[test]
-    fn test_twootokenize2() {
+    fn test_tokenize2() {
         use super::Operation::*;
         use super::FilterToken::*;
         use super::Token;
+
+        assert_eq!(tokenize2("siteRef->geoCity->dis == \"Chicago\""), Ok(
+            vec![
+                Path([id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")].to_vec()),
+                Binary(Equals),
+                Val(Token::EscapedString("Chicago".to_string()))
+            ]
+        ));
 
         assert_eq!(tokenize2("equip and siteRef->geoCity->dis == \"Chicago\""), Ok(
             vec![
@@ -755,6 +763,8 @@ mod tests {
                 id_to_path!("heat"),
             ]
         ));
+
+        println!("{:?}", tokenize2("equip or siteRef->dis == \"Chicago\""));
     }
 
     #[test]

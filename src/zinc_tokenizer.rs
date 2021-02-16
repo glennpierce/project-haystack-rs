@@ -518,7 +518,7 @@ fn ver<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     )(i)
 }
 
-fn token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+pub fn token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     alt((
         zinc_ref,
         quoted_string,
@@ -1538,5 +1538,12 @@ mod tests {
         );
 
 
+    }
+
+    #[test]
+    fn token_test2() {
+        use super::*;
+
+        println!("{:?}", token("elec"));
     }
 }
