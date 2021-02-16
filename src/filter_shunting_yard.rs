@@ -11,7 +11,7 @@ use std::fmt;
 
 use crate::error::*;
 use crate::token::Token;
-use crate::filter_tokenizer::{FilterToken, Operation, tokenize};
+use crate::filter_tokenizer::{FilterToken, Operation, tokenize, tokenize2};
 
 #[derive(Debug, Clone, Copy)]
 enum Associativity {
@@ -158,6 +158,44 @@ mod tests {
 
 
         assert_eq!(to_rpn(&tokenize("elec and heat").unwrap()),
+            Ok(vec![id_to_path!("elec"), id_to_path!("heat"), Binary(Operation::And)]));
+
+        // equip and siteRef->geoCity == "Chicago"
+        // The way to read the above expression is match an entity if:
+
+        // it has equip tag
+        // and it has a siteRef tag which is a Ref
+        // and what the siteRef tag points to has the geoCity tag
+        // and that the site's geoCity tag is equal to "Chicago"
+
+        assert_eq!(to_rpn(&tokenize("equip and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
+            Ok(vec![id_to_path!("equip"),
+                    Compare(
+                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
+                        Operation::Equals,
+                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
+                    )
+                    ,
+                    Binary(Operation::And)]));
+
+        // In RPN, the numbers and operators are listed one after another, and an operator always acts on the most recent numbers in the list.
+
+        // push equip on stack
+        // push siteRef on stack
+        // push geoCity on stack     stack = [geoCity, siteRef, equip]
+        // Apply binary has to  siteRef has geoCity . Add geoCity if exists     stack = [geoCity, equip]
+        // push dis to stack                            stack = [dis, geoCity, equip]
+        // Apply binary has to  geoCity has dis. Add dis if exists    stack = [dis, equip]
+        // push EscapedString("Chicago") to stack   stack = [EscapedString("Chicago"), dis, equip]
+        // Apply equals to dis == EscapedString("Chicago")  
+
+    }
+
+    #[test]
+    fn test_to_rpn2() {
+
+
+        assert_eq!(to_rpn(&tokenize2("elec and heat").unwrap()),
             Ok(vec![id_to_path!("elec"), id_to_path!("heat"), Binary(Operation::And)]));
 
         // equip and siteRef->geoCity == "Chicago"
