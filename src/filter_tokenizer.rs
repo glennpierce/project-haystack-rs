@@ -458,7 +458,8 @@ pub fn tokenize(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> 
 
 }
 
-
+// New way to tokensise. Stop tokenising binary ops as one unit and returning FilterToken::Compare
+// Its not flexible.
 pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError> {
     let mut state: TokenizerState = TokenizerState::LExpr;
     // number of function arguments left
@@ -470,7 +471,7 @@ pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError>
 
     while !s.is_empty() {
 
-        println!("s: {:?},  state: {:?}  paren_stack: {:?}", s, state, paren_stack);
+        // println!("s: {:?},  state: {:?}  paren_stack: {:?}", s, state, paren_stack);
 
         let r = match (state, paren_stack.last()) {
             (TokenizerState::AfterRExpr, None) => after_rexpr_no_paren2(s),
@@ -478,7 +479,7 @@ pub fn tokenize2(input: &str) -> Result<Vec<FilterToken>, FilterTokenParseError>
             (TokenizerState::LExpr, _) => lexpr2(s),
         };
 
-        println!("r: {:?}", r);
+        // println!("r: {:?}", r);
 
         match r {
             Ok((rest, t)) => {

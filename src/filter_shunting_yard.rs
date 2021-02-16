@@ -206,15 +206,24 @@ mod tests {
         // and what the siteRef tag points to has the geoCity tag
         // and that the site's geoCity tag is equal to "Chicago"
 
-        assert_eq!(to_rpn(&tokenize("equip and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
+        assert_eq!(to_rpn(&tokenize2("equip and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
             Ok(vec![id_to_path!("equip"),
-                    Compare(
-                        Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")])),
-                        Operation::Equals,
-                        Box::new( FilterToken::Val( Token::EscapedString("Chicago".to_string()) ) )
-                    )
-                    ,
-                    Binary(Operation::And)]));
+                    FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")]),
+                    FilterToken::Val( Token::EscapedString("Chicago".to_string()) ),
+                    Binary(Operation::Equals),
+                    Binary(Operation::And)
+                   ]));
+
+        
+        assert_eq!(to_rpn(&tokenize2("elec and heat and siteRef->geoCity->dis == \"Chicago\"").unwrap()),
+        Ok(vec![id_to_path!("elec"),
+                id_to_path!("heat"),
+                Binary(Operation::And),
+                FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("dis")]),
+                FilterToken::Val( Token::EscapedString("Chicago".to_string()) ),
+                Binary(Operation::Equals),
+                Binary(Operation::And)
+                ]));
 
         // In RPN, the numbers and operators are listed one after another, and an operator always acts on the most recent numbers in the list.
 
