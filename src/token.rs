@@ -13,6 +13,10 @@ use crate::hval::{HVal};
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 
+fn remove_first(s: &str) -> Option<&str> {
+    s.chars().next().map(|c| &s[c.len_utf8()..])
+}
+
 /// An error reported by the parser.
 #[derive(Debug, Clone)]
 pub enum TokenParseError {
@@ -215,11 +219,18 @@ impl fmt::Display for Token {
             Token::Id(val) => write!(f, "{}", val),
             
             Token::Ref(val, display) => {
+
+                let mut tmp: String = val.to_string();
+
+                if val.starts_with("@") {
+                    tmp = remove_first(val.as_ref()).unwrap().to_string();
+                }
+
                 if display.is_some() {
-                    return write!(f, "@{}{}", val, display.clone().unwrap());
+                    return write!(f, "@{}{}", tmp, display.clone().unwrap());
                 }
                 else {
-                    return write!(f, "@{}", val);
+                    return write!(f, "@{}", tmp);
                 }
             },
 
@@ -266,11 +277,19 @@ impl HVal for Token {
             Token::Id(val) => format!("{}", val),
             
             Token::Ref(val, display) => {
-                if display.is_some() {
-                    return format!("@{} {}", val, display.clone().unwrap());
+
+                let mut tmp: String = val.to_string();
+
+                if val.starts_with("@") {
+                    tmp = remove_first(val.as_ref()).unwrap().to_string();
                 }
-        
-                return format!("@{}", val);
+
+                if display.is_some() {
+                    return format!("@{}{}", tmp, display.clone().unwrap());
+                }
+                else {
+                    return format!("@{}", tmp);
+                }
             },
 
             Token::EscapedString(val) => format!("\"{}\"", val.escape_debug()),
