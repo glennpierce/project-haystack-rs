@@ -1544,6 +1544,19 @@ mod tests {
     fn token_test2() {
         use super::*;
 
-        println!("{:?}", token("elec"));
+        assert_ne!(
+            token("elec"),
+            Ok(("", Token::EscapedString("elec".into())))
+        );
+
+        assert_eq!(
+            token("\"elec\""),
+            Ok(("", Token::EscapedString("elec".into())))
+        );
+
+        assert_eq!(
+            token("\"bryn_bragl.bb2012.supply_to_pkom4_meter.pkcom4_supply_power\""),
+            Ok(("", Token::EscapedString("bryn_bragl.bb2012.supply_to_pkom4_meter.pkcom4_supply_power".into())))
+        );
     }
 }
