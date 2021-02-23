@@ -1528,6 +1528,15 @@ mod tests {
     fn grid_read_filter_test() {
         use super::*;
 
+        println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"point\"\n"));
+        println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"siteRef == @23233\"\n"));
+
+    }
+
+    #[test]
+    fn grid_read_filter_test2() {
+        use super::*;
+
         assert_nom_fn_eq_no_remain_check!(
             grid(
                 r#"ver:"3.0"
