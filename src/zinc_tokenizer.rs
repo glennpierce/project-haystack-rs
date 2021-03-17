@@ -78,6 +78,12 @@ fn comma_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     })(i)
 }
 
+fn newline_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
+    map(tag(","), |_: &str| {
+        Val::new(Box::new(NewLine::new()) as Box<dyn HVal>)
+    })(i)
+}
+
 fn null<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tag("N"), |_: &str| Token::Null)(i)
 }
@@ -683,12 +689,22 @@ fn row<'a>(i: &'a str) -> IResult<&'a str, Row, (&'a str, ErrorKind)> {
 
 // return Token::Rows(Vec<Box<Token>>),
 fn rows<'a>(i: &'a str) -> IResult<&'a str, Rows, (&'a str, ErrorKind)> {
+    // map(
+    //     separated_list(spacey(nl), row), // list of rows seperated by newline
+    //     |v: Vec<Row>| {
+    //         // Each row must end in nl we pop this here
+    //         let mut tmp = v.clone();
+    //         tmp.pop();
+    //         Rows::new(tmp)
+    //     },
+    // )(i)
+
     map(
         separated_list(spacey(nl), row), // list of rows seperated by newline
         |v: Vec<Row>| {
             // Each row must end in nl we pop this here
-            let mut tmp = v.clone();
-            tmp.pop();
+            let mut tmp: Vec<Row> = v.into_iter().filter(|r| r.len() > 0 ).collect();
+            // tmp.pop();
             Rows::new(tmp)
         },
     )(i)
@@ -1546,7 +1562,11 @@ mod tests {
     fn grid_read_filter_test() {
         use super::*;
 
+        println!("{:?}", row("\"point\""));
+        println!("{:?}", rows("\"point\"\n\n\n"));
+        println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"point\""));
         println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"point\"\n"));
+        println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"point\"\n\n\n"));
         println!("{:?}", grid("ver:\"3.0\"\nfilter\n\"siteRef == @23233\"\n"));
 
     }

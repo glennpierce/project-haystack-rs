@@ -441,6 +441,47 @@ impl HVal for Comma {
     }
 }
 
+pub struct NewLine {
+}
+
+impl NewLine {
+    pub fn new() -> Self {
+
+        NewLine {}
+    }
+}
+
+impl fmt::Debug for NewLine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "\n")
+    }
+}
+
+impl fmt::Display for NewLine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\n")
+    }
+}
+
+impl HVal for NewLine {
+
+    fn clone_dyn(&self) -> Box<dyn HVal> {
+        Box::new(NewLine::new()) as Box<dyn HVal>
+    }
+
+    fn type_name(&self) -> String {
+        "NewLine".to_string()
+    }
+
+    fn to_zinc(&self) -> String  {
+        "\n".into()
+    }
+ 
+    fn to_json(&self) -> String  {
+        "\n".into()
+    }
+}
+
 // ///////////////////////////////////
 
 fn variant_eq<T>(a: &T, b: &T) -> bool {
