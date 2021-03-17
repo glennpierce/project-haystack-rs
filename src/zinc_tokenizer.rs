@@ -273,10 +273,17 @@ fn timezone_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)>
 // YYYY-MM-DD'T'hh:mm:ss.FFFFFFFFFz zzzz
 fn datetime_s<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     map(
-        recognize(tuple((date, char('T'), alt((time_with_subseconds_s, time_s)), timezone_s))),
+        recognize(tuple((date, char('T'), alt((time_with_subseconds_s, time_s)), opt(timezone_s)))),
         |s: &str| s,
     )(i)
 }
+
+// fn datetime_s_without_tz<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
+//     map(
+//         recognize(tuple((date, char('T'), alt((time_with_subseconds_s, time_s))))),
+//         |s: &str| s,
+//     )(i)
+// }
 
 fn str_to_datetime_token(s: &str) -> Token {
     // First split off tz name at space
@@ -290,11 +297,20 @@ fn str_to_datetime_token(s: &str) -> Token {
         tmp = dtparse::parse(s).unwrap();
     }
 
-    let dt = tmp
-        .1
-        .expect("Timezone is None")
-        .from_local_datetime(&tmp.0)
-        .unwrap();
+    let dt: DateTime<FixedOffset>;
+
+    if tmp.1.is_some() {
+        dt = tmp
+            .1
+            .expect("Timezone is None")
+            .from_local_datetime(&tmp.0)
+            .unwrap();
+    }
+    else {
+
+        let tz_offset = FixedOffset::west(0);
+        dt = tz_offset.from_local_datetime(&tmp.0).unwrap();
+    }
 
     Token::DateTime(dt)
 }
@@ -812,7 +828,9 @@ mod tests {
        println!("{:?}", datetime_s("2020-09-02T11:30:00+00:00"));
        println!("{:?}", datetime_range("2020-09-02T11:30:00+00:00,2020-09-02T12:30:00+00:00"));
        println!("{:?}", date_range_to_token("2020-09-02T11:30:00+00:00"));
-
+       println!("{:?}", datetime_range_s("2021-03-15T00:00:00,2021-03-15T01:30:59"));
+       println!("{:?}", datetime_range("2021-03-15T00:00:00,2021-03-15T01:30:59"));
+       println!("{:?}", date_range_to_token("2020-09-02T11:30:00,2020-09-02T12:30:00"));
 
     }
 
@@ -1568,4 +1586,36 @@ mod tests {
             Ok(("", Token::EscapedString("bryn_bragl.bb2012.supply_to_pkom4_meter.pkcom4_supply_power".into())))
         );
     }
+
+    #[test]
+    fn datetime_range_new_test() {
+        use super::*;
+
+
+        //fn datetime_range_s<'a>(i: &'a str) -> IResult<&'a str, (&'a str, &'a str), (&'a str, ErrorKind)> {
+
+            
+            //2021-03-15T01:30:59
+
+        // let range_result = datetime_s("2021-03-15T00:00:00");
+
+        // println!("{:?}", range_result);
+
+
+        let range_result = datetime_range_s("2021-03-15T00:00:00,2021-03-15T01:30:59");
+
+        println!("{:?}", range_result);
+
+        // let range_result = date_range_to_token("2021-03-15T00:00:00,2021-03-15T01:30:59");
+
+        // println!("{:?}", range_result);
+
+        // assert_eq!(
+        //     token("\"bryn_bragl.bb2012.supply_to_pkom4_meter.pkcom4_supply_power\""),
+        //     Ok(("", Token::EscapedString("bryn_bragl.bb2012.supply_to_pkom4_meter.pkcom4_supply_power".into())))
+        // );
+    }
+
+    
+
 }
