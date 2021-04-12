@@ -482,7 +482,18 @@ fn simple_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)
             many1(digit1),
             opt(preceded(char('.'), many1(digit1))),
         ))),
-        |s: &str| Token::Number(ZincNumber::new(s.parse::<f64>().unwrap()), "".into()),
+        |s: &str| {
+            
+            let int_parsed_option = s.parse::<i64>();
+
+            if int_parsed_option.is_ok() {
+                return Token::IntegerNumber(ZincIntegerNumber::new(int_parsed_option.unwrap()), "".into());
+            }
+            
+            // Try to parse as float
+            Token::FloatNumber(ZincFloatNumber::new(s.parse::<f64>().unwrap()), "".into())
+        }
+        ,
     )(i)
 }
 
@@ -490,10 +501,27 @@ fn exponent<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((alt((char('e'), char('E'))), simple_number)))(i)
 }
 
+// fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
+//     map(
+//         recognize(tuple((simple_number, opt(exponent)))),
+//         |s: &str| s.parse::<f64>().unwrap(),
+//     )(i)
+// }
+
+
 fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
     map(
-        recognize(tuple((simple_number, opt(exponent)))),
-        |s: &str| s.parse::<f64>().unwrap(),
+        tuple((simple_number, opt(exponent))),
+        |t: (&str, Option<&str>)| {
+
+            let s = recognize(tuple((simple_number, opt(exponent))))(i).unwrap();
+
+            if t.1.is_some() {
+                return s.0.parse::<f64>().unwrap();
+            }
+
+            s.0.parse::<i64>().unwrap()
+        },
     )(i)
 }
 
@@ -503,7 +531,7 @@ fn units<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
 
 pub fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tuple((number, opt(units))), |t: (f64, Option<&str>)| {
-        Token::Number(ZincNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
+        Token::FloatNumber(ZincFloatNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
     })(i)
 }
 
@@ -761,7 +789,7 @@ mod tests {
     macro_rules! number {
         ( $x:expr ) => {
             {
-                Token::Number(ZincNumber::new($x), "".to_string())
+                Token::FloatNumber(ZincFloatNumber::new($x), "".to_string())
             }
         };
     }
@@ -951,7 +979,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("32143m"),
-            Ok(("", Token::Number(ZincNumber::new(32143f64), "m".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143f64), "m".into())))
         );
 
         assert_nom_fn_eq!(
@@ -1008,7 +1036,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("32143m"),
-            Ok(("", Token::Number(ZincNumber::new(32143f64), "m".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143f64), "m".into())))
         );
 
         assert_nom_fn_is_ok!(dict(r#"{id:@hisId projName:"test"}"#));
@@ -1271,7 +1299,7 @@ mod tests {
 
         assert_nom_fn_eq_no_remain_check!(
             row(r#""list",[1,2,3]"#),
-            r#"Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])])"#
+            r#"Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])])"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1304,7 +1332,7 @@ mod tests {
                 "list",[1,2,3]
                 "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])])]))"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1322,7 +1350,7 @@ mod tests {
             "scalar","simple string"
             "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, "")]), Row([Number(ZincFloatNumber { number: 3.0 }, ""), Number(ZincFloatNumber { number: 4.0 }, "")])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1340,7 +1368,7 @@ mod tests {
             "scalar","simple string"
             "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, ""), Number(ZincNumber { number: 3.0 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincNumber { number: 1.0 }, ""), Number(ZincNumber { number: 2.0 }, "")]), Row([Number(ZincNumber { number: 3.0 }, ""), Number(ZincNumber { number: 4.0 }, "")])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, "")]), Row([Number(ZincFloatNumber { number: 3.0 }, ""), Number(ZincFloatNumber { number: 4.0 }, "")])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
     }
 
@@ -1387,7 +1415,7 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn it_works1() {
         use super::*;
 
         assert_eq!(inf("Inf"), Ok(("", Token::Inf)));
@@ -1400,23 +1428,23 @@ mod tests {
 
         assert_eq!(
             simple_number("32143"),
-            Ok(("", Token::Number(ZincNumber::new(32143f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143f64), "".into())))
         );
         assert_eq!(
             simple_number("2"),
-            Ok(("", Token::Number(ZincNumber::new(2.0f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(2.0f64), "".into())))
         );
         assert_eq!(
             simple_number("32143.25"),
-            Ok(("", Token::Number(ZincNumber::new(32143.25f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143.25f64), "".into())))
         );
         assert_eq!(
             simple_number("-0.125"),
-            Ok(("", Token::Number(ZincNumber::new(-0.125f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-0.125f64), "".into())))
         );
         assert_eq!(
             simple_number("+674.96"),
-            Ok(("", Token::Number(ZincNumber::new(674.96f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(674.96f64), "".into())))
         );
 
         assert_eq!(number("1"), Ok(("", 1f64)));
@@ -1437,26 +1465,26 @@ mod tests {
 
         assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
 
-        assert_eq!(zinc_number("1"), Ok(("", Token::Number(ZincNumber::new(1f64), "".into()))));
+        assert_eq!(zinc_number("1"), Ok(("", Token::FloatNumber(ZincFloatNumber::new(1f64), "".into()))));
 
         assert_eq!(
             zinc_number("5.4"),
-            Ok(("", Token::Number(ZincNumber::new(5.4f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(5.4f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("-5.4"),
-            Ok(("", Token::Number(ZincNumber::new(-5.4f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("-5.4e-45"),
-            Ok(("", Token::Number(ZincNumber::new(-5.4e-45f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4e-45f64), "".into())))
         );
 
         assert_eq!(
             zinc_number("67.3E7"),
-            Ok(("", Token::Number(ZincNumber::new(67.3E7f64), "".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(67.3E7f64), "".into())))
         );
 
         assert_eq!(zinc_number("Inf"), Ok(("", Token::Inf)));
@@ -1472,7 +1500,7 @@ mod tests {
 
         assert_eq!(
             zinc_number("-5.4e-45Kg"),
-            Ok(("", Token::Number(ZincNumber::new(-5.4e-45f64), "Kg".into())))
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4e-45f64), "Kg".into())))
         );
 
         assert_eq!(null("N"), Ok(("", Token::Null)));
@@ -1493,6 +1521,97 @@ mod tests {
             zinc_ref("@153c-699a \"HQ\""),
             Ok(("", Token::Ref("@153c-699a".into(), Some("HQ".into()))))
         );
+    }
+
+    #[test]
+    fn it_works2() {
+        use super::*;
+
+        assert_eq!(inf("Inf"), Ok(("", Token::Inf)));
+
+        assert_eq!(inf("-Inf"), Ok(("", Token::InfNeg)));
+
+        assert_eq!(nan("NaN"), Ok(("", Token::NaN)));
+
+        assert_eq!(nan("-NaN"), Err(nom::Err::Error(("-NaN", ErrorKind::Tag))));
+
+        assert_eq!(
+            simple_number("32143"),
+            Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(32143i64), "".into())))
+        );
+        assert_eq!(
+            simple_number("2"),
+            Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(2i64), "".into())))
+        );
+        assert_eq!(
+            simple_number("32143.25"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143.25f64), "".into())))
+        );
+        assert_eq!(
+            simple_number("-0.125"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-0.125f64), "".into())))
+        );
+        assert_eq!(
+            simple_number("+674.96"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(674.96f64), "".into())))
+        );
+
+        assert_eq!(number("1"), Ok(("", 1f64)));
+
+        assert_eq!(number("-56"), Ok(("", -56f64)));
+
+        assert_eq!(number("-34"), Ok(("", -34f64)));
+
+        assert_eq!(number("5.4"), Ok(("", 5.4f64)));
+
+        assert_eq!(number("-5.4"), Ok(("", -5.4f64)));
+
+        assert_eq!(number("9.23"), Ok(("", 9.23f64)));
+
+        assert_eq!(number("5.4e-45"), Ok(("", 5.4e-45f64)));
+
+        assert_eq!(number("-5.4e-45"), Ok(("", -5.4e-45f64)));
+
+        assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
+
+        assert_eq!(zinc_number("1"), Ok(("", Token::FloatNumber(ZincFloatNumber::new(1f64), "".into()))));
+
+        assert_eq!(
+            zinc_number("5.4"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(5.4f64), "".into())))
+        );
+
+        assert_eq!(
+            zinc_number("-5.4"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4f64), "".into())))
+        );
+
+        assert_eq!(
+            zinc_number("-5.4e-45"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4e-45f64), "".into())))
+        );
+
+        assert_eq!(
+            zinc_number("67.3E7"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(67.3E7f64), "".into())))
+        );
+
+        assert_eq!(zinc_number("Inf"), Ok(("", Token::Inf)));
+
+        assert_eq!(zinc_number("-Inf"), Ok(("", Token::InfNeg)));
+
+        assert_eq!(zinc_number("NaN"), Ok(("", Token::NaN)));
+
+        assert_eq!(
+            zinc_number("-NaN"),
+            Err(nom::Err::Error(("-NaN", ErrorKind::Tag)))
+        );
+
+        assert_eq!(
+            zinc_number("-5.4e-45Kg"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(-5.4e-45f64), "Kg".into())))
+        );
+
     }
 
     #[test]
@@ -1581,7 +1700,7 @@ mod tests {
                 filter,limit
                 "point and siteRef==@siteA",1000"#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("filter"), Some([])), Col(Id("limit"), Some([]))]), Rows([Row([EscapedString("point and siteRef==@siteA"), Number(ZincNumber { number: 1000.0 }, "")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("filter"), Some([])), Col(Id("limit"), Some([]))]), Rows([Row([EscapedString("point and siteRef==@siteA"), Number(ZincFloatNumber { number: 1000.0 }, "")])]))"#
         );
 
 

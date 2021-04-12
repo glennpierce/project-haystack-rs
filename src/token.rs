@@ -63,46 +63,84 @@ impl std::error::Error for TokenParseError {
     }
 }
 
-// I have ZincNumber so we can implement Eq and put Tokens into HashSets etc as f64 cannot support Eq
+// I have ZincFloatNumber so we can implement Eq and put Tokens into HashSets etc as f64 cannot support Eq
 #[derive(Debug, Clone, PartialOrd)]
-pub struct ZincNumber {
+pub struct ZincFloatNumber {
     pub number: f64,
 }
 
-impl ZincNumber {
-    pub fn new(f: f64) -> ZincNumber {
-        ZincNumber {
+impl ZincFloatNumber {
+    pub fn new(f: f64) -> ZincFloatNumber {
+        ZincFloatNumber {
             number: f,
         }
     }
 }
 
-impl Eq for ZincNumber {}
+impl Eq for ZincFloatNumber {}
 
-impl PartialEq for ZincNumber {
+impl PartialEq for ZincFloatNumber {
     fn eq(&self, other: &Self) -> bool {
         self.number == other.number
     }
 }
 
-impl Ord for ZincNumber {
+impl Ord for ZincFloatNumber {
     fn cmp(&self, other: &Self) -> Ordering {
         self.number.to_string().cmp(&other.number.to_string())
     }
 }
 
-impl Hash for ZincNumber {
+impl Hash for ZincFloatNumber {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.number.to_string().hash(state)
     }
 }
 
-impl fmt::Display for ZincNumber {
+impl fmt::Display for ZincFloatNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.number)   
     }
 }
 
+#[derive(Debug, Clone, PartialOrd)]
+pub struct ZincIntegerNumber {
+    pub number: i64,
+}
+
+impl ZincIntegerNumber {
+    pub fn new(f: i64) -> ZincIntegerNumber {
+        ZincIntegerNumber {
+            number: f,
+        }
+    }
+}
+
+impl Eq for ZincIntegerNumber {}
+
+impl PartialEq for ZincIntegerNumber {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
+
+impl Ord for ZincIntegerNumber {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.number.to_string().cmp(&other.number.to_string())
+    }
+}
+
+impl Hash for ZincIntegerNumber {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.number.to_string().hash(state)
+    }
+}
+
+impl fmt::Display for ZincIntegerNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.number)   
+    }
+}
 
 /// Expression tokens.
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Clone)]
@@ -131,7 +169,9 @@ pub enum Token {
     Comma,
 
     /// A number and units
-    Number(ZincNumber, String),
+    FloatNumber(ZincFloatNumber, String),
+
+    IntegerNumber(ZincIntegerNumber, String),
 
     Id(String),
 
@@ -164,7 +204,7 @@ impl Token {
     pub fn as_integer(&self) -> Option<i64> {
     
         match &self {
-            Token::Number(id, units) => Some(id.number as i64),
+            Token::FloatNumber(id, units) => Some(id.number as i64),
             _ => None
         }
     }
@@ -185,7 +225,7 @@ impl Token {
 //             Token::InfNeg => Token::InfNeg.hash(state),
 //             Token::NaN => Token::NaN.hash(state),
 //             Token::Comma => Token::Comma.hash(state),
-//             Token::Number(num, units) => (num.to_string(), units).hash(state),
+//             Token::FloatNumber(num, units) => (num.to_string(), units).hash(state),
 //             Token::Id(val) => val.hash(state),
 //             Token::Ref(val, display) => (val.to_string(), display).hash(state),
 //             Token::EscapedString(val) => val.hash(state),
@@ -215,7 +255,8 @@ impl fmt::Display for Token {
             Token::InfNeg => write!(f, "-Inf"),
             Token::NaN => write!(f, "NaN"),
             Token::Comma => write!(f, ","),
-            Token::Number(num, units) => write!(f, "{}{}", num, units),
+            Token::FloatNumber(num, units) => write!(f, "{}{}", num, units),
+            Token::IntegerNumber(num, units) => write!(f, "{}{}", num, units),
             Token::Id(val) => write!(f, "{}", val),
             
             Token::Ref(val, display) => {
@@ -273,7 +314,8 @@ impl HVal for Token {
             Token::InfNeg => "-Inf".to_string(),
             Token::NaN => "NaN".to_string(),
             Token::Comma => ",".to_string(),
-            Token::Number(num, units) => format!("{}{}", num, units),
+            Token::FloatNumber(num, units) => format!("{}{}", num, units),
+            Token::IntegerNumber(num, units) => format!("{}{}", num, units),
             Token::Id(val) => format!("{}", val),
             
             Token::Ref(val, display) => {
@@ -530,7 +572,7 @@ impl Tag {
 
     pub fn new_number(id: &str, value: f64, units: &str) -> Self {
 
-        Tag::new_from_token(Token::Id(id.to_string()), Token::Number(ZincNumber::new(value), units.to_string()))
+        Tag::new_from_token(Token::Id(id.to_string()), Token::FloatNumber(ZincFloatNumber::new(value), units.to_string()))
     }
 
     pub fn new_ref_from_token(id: &Token, value: &str) -> Self {
@@ -1001,7 +1043,7 @@ impl Col {
     // pub fn get_id_as_integer(&self) -> Option<i64> {
     
     //     match &self.id {
-    //         Token::Number(id, units) => Some(id.number as i64),
+    //         Token::FloatNumber(id, units) => Some(id.number as i64),
     //         _ => None
     //     }
     // }
@@ -1481,7 +1523,7 @@ mod tests {
     fn token_test1() {
         use super::*;
 
-        assert_ne!(ZincNumber::new(5.0), ZincNumber::new(3.0));
-        assert_eq!(ZincNumber::new(5.0), ZincNumber::new(5.0));
+        assert_ne!(ZincFloatNumber::new(5.0), ZincFloatNumber::new(3.0));
+        assert_eq!(ZincFloatNumber::new(5.0), ZincFloatNumber::new(5.0));
     }
 }

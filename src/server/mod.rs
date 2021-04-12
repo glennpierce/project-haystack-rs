@@ -1181,7 +1181,7 @@ pub async fn historical_read (
     let dt_offset: DateTime<FixedOffset> = DateTime::<FixedOffset>::from(dt);
  
     let row1 = Row::new(vec![Val::new(Box::new(Token::DateTime(dt_offset))),
-                            Val::new(Box::new(Token::Number(ZincNumber::new(637.6), "".into())))]);
+                            Val::new(Box::new(Token::FloatNumber(ZincFloatNumber::new(637.6), "".into())))]);
 
     let grid = Grid::new(grid_metadata, cols, Rows::new(vec![row1]));
     let response = warp::reply::with_status(grid.to_zinc(), http::StatusCode::from_u16(200).unwrap());

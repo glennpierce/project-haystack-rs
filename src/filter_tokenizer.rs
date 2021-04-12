@@ -51,7 +51,7 @@ fn filter_val<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKi
         match &t {
             
             Token::Bool(b) => FilterToken::Val(Token::Bool(*b)),
-            Token::Number(num, units) => FilterToken::Val(t),
+            Token::FloatNumber(num, units) => FilterToken::Val(t),
             //Token::Id(val) => FilterToken::Name(val),
             Token::Ref(val, display) => FilterToken::Val(t),
             Token::EscapedString(val) => FilterToken::Val(t),
@@ -688,7 +688,7 @@ mod tests {
                 Compare(
                         Box::new(FilterToken::Path(vec![id_to_token!("siteRef"), id_to_token!("geoCity"), id_to_token!("carnego_number_of_bedrooms")])),
                         Operation::MoreThan,
-                        Box::new( FilterToken::Val( Token::Number(ZincNumber::new(5.0), "".to_string()) ) )
+                        Box::new( FilterToken::Val( Token::FloatNumber(ZincFloatNumber::new(5.0), "".to_string()) ) )
                     )
             ]
         ));
