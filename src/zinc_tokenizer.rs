@@ -1291,7 +1291,7 @@ mod tests {
         // zero rows get returned here as each row needs to end with a nl
         assert_nom_fn_eq!(
             grid("ver:\"3.0\" id:@619265 action:\"tags\"\nparams\n[]"),
-            r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@619265", None))), Tag(Id("action"), Some(EscapedString("tags")))])), Cols([Col(Id("params"), Some([]))]), Rows([]))))"#
+            r#"Ok(("", Grid(GridMeta(Ver("3.0"), Some([Tag(Id("id"), Some(Ref("@619265", None))), Tag(Id("action"), Some(EscapedString("tags")))])), Cols([Col(Id("params"), Some([]))]), Rows([Row([List([])])]))))"#
         );
 
         assert_nom_fn_eq!(
@@ -1372,7 +1372,12 @@ mod tests {
 
         assert_nom_fn_eq_no_remain_check!(
             row(r#""list",[1,2,3]"#),
-            r#"Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])])"#
+            r#"Row([EscapedString("list"), List([IntegerNumber(ZincIntegerNumber { number: 1 }, ""), IntegerNumber(ZincIntegerNumber { number: 2 }, ""), IntegerNumber(ZincIntegerNumber { number: 3 }, "")])])"#
+        );
+
+        assert_nom_fn_eq_no_remain_check!(
+            row(r#""list",[1.0,2.0,3.0]"#),
+            r#"Row([EscapedString("list"), List([FloatNumber(ZincFloatNumber { number: 1.0 }, ""), FloatNumber(ZincFloatNumber { number: 2.0 }, ""), FloatNumber(ZincFloatNumber { number: 3.0 }, "")])])"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1405,14 +1410,14 @@ mod tests {
                 "list",[1,2,3]
                 "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([IntegerNumber(ZincIntegerNumber { number: 1 }, ""), IntegerNumber(ZincIntegerNumber { number: 2 }, ""), IntegerNumber(ZincIntegerNumber { number: 3 }, "")])])]))"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
             grid(
                 r#"ver:"3.0"
             type,val
-            "list",[1,2,3]
+            "list",[1.0,2.0,3.0]
             "dict",{dis:"Dict!" foo}
             "grid",<<
             ver:"2.0"
@@ -1423,7 +1428,7 @@ mod tests {
             "scalar","simple string"
             "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, "")]), Row([Number(ZincFloatNumber { number: 3.0 }, ""), Number(ZincFloatNumber { number: 4.0 }, "")])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("type"), Some([])), Col(Id("val"), Some([]))]), Rows([Row([EscapedString("list"), List([FloatNumber(ZincFloatNumber { number: 1.0 }, ""), FloatNumber(ZincFloatNumber { number: 2.0 }, ""), FloatNumber(ZincFloatNumber { number: 3.0 }, "")])]), Row([EscapedString("dict"), Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None})]), Row([EscapedString("grid"), Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([IntegerNumber(ZincIntegerNumber { number: 1 }, ""), IntegerNumber(ZincIntegerNumber { number: 2 }, "")]), Row([IntegerNumber(ZincIntegerNumber { number: 3 }, ""), IntegerNumber(ZincIntegerNumber { number: 4 }, "")])]))]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
 
         assert_nom_fn_eq_no_remain_check!(
@@ -1441,7 +1446,7 @@ mod tests {
             "scalar","simple string"
             "#
             ),
-            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, ""), Number(ZincFloatNumber { number: 3.0 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([Number(ZincFloatNumber { number: 1.0 }, ""), Number(ZincFloatNumber { number: 2.0 }, "")]), Row([Number(ZincFloatNumber { number: 3.0 }, ""), Number(ZincFloatNumber { number: 4.0 }, "")])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("val"), Some([])), Col(Id("type"), Some([]))]), Rows([Row([List([IntegerNumber(ZincIntegerNumber { number: 1 }, ""), IntegerNumber(ZincIntegerNumber { number: 2 }, ""), IntegerNumber(ZincIntegerNumber { number: 3 }, "")]), EscapedString("list")]), Row([Dict({"dis": Some(Tag(Id("dis"), Some(EscapedString("Dict!")))), "foo": None}), EscapedString("dict")]), Row([Grid(GridMeta(Ver("2.0"), Some([])), Cols([Col(Id("a"), Some([])), Col(Id("b"), Some([]))]), Rows([Row([IntegerNumber(ZincIntegerNumber { number: 1 }, ""), IntegerNumber(ZincIntegerNumber { number: 2 }, "")]), Row([IntegerNumber(ZincIntegerNumber { number: 3 }, ""), IntegerNumber(ZincIntegerNumber { number: 4 }, "")])])), EscapedString("grid")]), Row([EscapedString("scalar"), EscapedString("simple string")])]))"#
         );
     }
 
