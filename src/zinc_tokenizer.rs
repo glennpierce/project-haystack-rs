@@ -497,41 +497,114 @@ fn simple_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)
     )(i)
 }
 
+fn simple_float_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+    map(
+        recognize(tuple((
+            opt(alt((char('-'), char('+')))),
+            many1(digit1),
+            char('.'),
+            many1(digit1),
+        ))),
+        |s: &str| {
+            
+            // Try to parse as float
+            Token::FloatNumber(ZincFloatNumber::new(s.parse::<f64>().unwrap()), "".into())
+        }
+        ,
+    )(i)
+}
+
+fn simple_integer_number<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+    map(
+        recognize(tuple((
+            opt(alt((char('-'), char('+')))),
+            many1(digit1),
+        ))),
+        |s: &str| {
+            
+            // Try to parse as float
+            Token::IntegerNumber(ZincIntegerNumber::new(s.parse::<i64>().unwrap()), "".into())
+        }
+        ,
+    )(i)
+}
+
 fn exponent<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((alt((char('e'), char('E'))), simple_number)))(i)
 }
 
-// fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
-//     map(
-//         recognize(tuple((simple_number, opt(exponent)))),
-//         |s: &str| s.parse::<f64>().unwrap(),
-//     )(i)
-// }
-
-
 fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
     map(
-        tuple((simple_number, opt(exponent))),
-        |t: (&str, Option<&str>)| {
-
-            let s = recognize(tuple((simple_number, opt(exponent))))(i).unwrap();
-
-            if t.1.is_some() {
-                return s.0.parse::<f64>().unwrap();
-            }
-
-            s.0.parse::<i64>().unwrap()
-        },
+        recognize(tuple((simple_number, opt(exponent)))),
+        |s: &str| s.parse::<f64>().unwrap(),
     )(i)
 }
+
+
+fn integer_number<'a>(i: &'a str) -> IResult<&'a str, i64, (&'a str, ErrorKind)> {
+    map(
+        recognize(tuple((simple_integer_number, opt(exponent)))),
+        |s: &str| s.parse::<i64>().unwrap(),
+    )(i)
+}
+
+fn integer_number_token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)>  {
+    map(integer_number, |v: i64 | Token::IntegerNumber(ZincIntegerNumber::new(v), "".to_string()))(i)
+}
+
+fn float_number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
+    map(
+        recognize(tuple((simple_float_number, opt(exponent)))),
+        |s: &str| s.parse::<f64>().unwrap(),
+    )(i)
+}
+
+fn float_number_token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)>  {
+    map(float_number, |v: f64 | Token::FloatNumber(ZincFloatNumber::new(v), "".to_string()))(i)
+}
+
+// fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
+//     map(
+//         tuple((simple_number, opt(exponent))),
+//         |t: (&str, Option<&str>)| {
+
+//             let s = recognize(tuple((simple_number, opt(exponent))))(i).unwrap();
+
+//             if t.1.is_some() {
+//                 return s.0.parse::<f64>().unwrap();
+//             }
+
+//             s.0.parse::<i64>().unwrap()
+//         },
+//     )(i)
+// }
 
 fn units<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     alphanumeric1(i)
 }
 
+// pub fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+//     map(tuple((number, opt(units))), |t: (f64, Option<&str>)| {
+//         Token::FloatNumber(ZincFloatNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
+//     })(i)
+// }
+
+// pub fn number_token<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
+//     map(alt((float_number, integer_number)), |t: (f64, Option<&str>)| {
+//         Token::FloatNumber(ZincFloatNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
+//     })(i)
+// }
+
 pub fn number_with_unit<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
-    map(tuple((number, opt(units))), |t: (f64, Option<&str>)| {
-        Token::FloatNumber(ZincFloatNumber::new(t.0), t.1.unwrap_or(&"".to_string()).into())
+    map(tuple((alt((float_number_token, integer_number_token)), opt(units))), |t: (Token, Option<&str>)| {
+        
+         match t.0 {
+            Token::FloatNumber(v, _) => Token::FloatNumber(v, t.1.unwrap_or(&"".to_string()).into()),
+            Token::IntegerNumber(v, _) => Token::IntegerNumber(v, t.1.unwrap_or(&"".to_string()).into()),
+            _ => {
+                panic!("Invalid number ?");
+            }
+        }
     })(i)
 }
 
@@ -1539,6 +1612,17 @@ mod tests {
             simple_number("32143"),
             Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(32143i64), "".into())))
         );
+
+        assert_eq!(
+            simple_integer_number("32143"),
+            Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(32143i64), "".into())))
+        );
+
+        assert_eq!(
+            simple_float_number("32143.45"),
+            Ok(("", Token::FloatNumber(ZincFloatNumber::new(32143.45f64), "".into())))
+        );
+
         assert_eq!(
             simple_number("2"),
             Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(2i64), "".into())))
@@ -1574,7 +1658,9 @@ mod tests {
 
         assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
 
-        assert_eq!(zinc_number("1"), Ok(("", Token::FloatNumber(ZincFloatNumber::new(1f64), "".into()))));
+        assert_eq!(zinc_number("1"), Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(1i64), "".into()))));
+
+        assert_eq!(zinc_number("1.0"), Ok(("", Token::FloatNumber(ZincFloatNumber::new(1f64), "".into()))));
 
         assert_eq!(
             zinc_number("5.4"),
