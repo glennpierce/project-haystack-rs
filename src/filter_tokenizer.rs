@@ -1,17 +1,22 @@
 //! Tokenizer that converts a zinc string form into a series of `Token`s.
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, tag},
-    character::complete::{alphanumeric1, char, digit1, multispace0, multispace1, newline, one_of, space0},
-    combinator::{complete, map, opt, peek, recognize},
+    // bytes::complete::{is_a, tag},
+    bytes::complete::{tag},
+    // character::complete::{alphanumeric1, char, digit1, multispace0, multispace1, newline, one_of, space0},
+    character::complete::{multispace0},
+    //combinator::{complete, map, opt, peek, recognize},
+    combinator::{map},
     error::ErrorKind,
-    multi::{many1, separated_list},
-    sequence::{delimited, preceded, separated_pair, terminated, tuple}, IResult,
+    // multi::{many1, separated_list},
+    multi::{separated_list},
+    sequence::{delimited, tuple}, IResult,
+    // sequence::{delimited, preceded, separated_pair, terminated, tuple}, IResult,
 };
 
-use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Utc};
+// use chrono::{Date, DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Utc};
 
-use crate::hval::HVal;
+// use crate::hval::HVal;
 use crate::token::*;
 use crate::error::FilterTokenParseError;
 use crate::zinc_tokenizer::{number_with_unit, zinc_ref, quoted_string, time_with_subseconds, uri, date, zinc_id};
@@ -51,13 +56,13 @@ fn filter_val<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKi
         match &t {
             
             Token::Bool(b) => FilterToken::Val(Token::Bool(*b)),
-            Token::FloatNumber(num, units) => FilterToken::Val(t),
+            Token::FloatNumber(_num, _units) => FilterToken::Val(t),
             //Token::Id(val) => FilterToken::Name(val),
-            Token::Ref(val, display) => FilterToken::Val(t),
-            Token::EscapedString(val) => FilterToken::Val(t),
-            Token::Date(val) => FilterToken::Val(t),
-            Token::Uri(val) => FilterToken::Val(t),
-            Token::Time(val) => FilterToken::Val(t),
+            Token::Ref(_val, _display) => FilterToken::Val(t),
+            Token::EscapedString(_val) => FilterToken::Val(t),
+            Token::Date(_val) => FilterToken::Val(t),
+            Token::Uri(_val) => FilterToken::Val(t),
+            Token::Time(_val) => FilterToken::Val(t),
             _ => unreachable!(),
         }
 
@@ -198,12 +203,12 @@ fn cmp2<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
 fn and<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    map(tag("and"), |o: &str| { FilterToken::Binary(Operation::And)})(i)
+    map(tag("and"), |_o: &str| { FilterToken::Binary(Operation::And)})(i)
 }
 
 fn or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    map(tag("or"), |o: &str| { FilterToken::Binary(Operation::Or)})(i)
+    map(tag("or"), |_o: &str| { FilterToken::Binary(Operation::Or)})(i)
 }
 
 fn and_or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
@@ -211,14 +216,14 @@ fn and_or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)>
     alt((and, or))(i)
 }
 
-fn and_or_cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+// fn and_or_cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     
-    alt((cmp2, and, or))(i)
-}
+//     alt((cmp2, and, or))(i)
+// }
 
 fn not<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
 
-    map(tag("not"), |o: &str| { FilterToken::Unary(Operation::Not)})(i)
+    map(tag("not"), |_o: &str| { FilterToken::Unary(Operation::Not)})(i)
 }
 
 fn term<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {

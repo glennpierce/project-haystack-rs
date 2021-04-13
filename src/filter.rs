@@ -3,9 +3,9 @@ use crate::filter_shunting_yard::to_rpn;
 use std;
 use std::fmt;
 use filter_tokenizer::{tokenize, FilterToken, Operation};
-use chrono::{DateTime, Utc};
+// use chrono::{DateTime, Utc};
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet};
 
 use crate::*;
 use crate::error::*;
@@ -13,12 +13,12 @@ use crate::token::Token;
 use crate::token::Tag;
 
 use array_tool::vec::Intersect;
-use array_tool::uniques;
+// use array_tool::uniques;
 
-use itertools::{Itertools, EitherOrBoth};
-use itertools::EitherOrBoth::{Both, Left, Right};
+// use itertools::{Itertools, EitherOrBoth};
+// use itertools::EitherOrBoth::{Both, Left, Right};
 
-type ContextHashMap<K, V> = HashMap<K, V>;
+// type ContextHashMap<K, V> = HashMap<K, V>;
 
 /// Representation of a parsed expression.
 ///
@@ -65,20 +65,20 @@ impl fmt::Display for StackValue {
     }
 }
 
-fn variant_eq<T>(a: &T, b: &T) -> bool {
-    std::mem::discriminant(a) == std::mem::discriminant(b)
-}
+// fn variant_eq<T>(a: &T, b: &T) -> bool {
+//     std::mem::discriminant(a) == std::mem::discriminant(b)
+// }
 
-fn filter_tokens_by_ref_type(v: &Vec<Token>) -> Vec<Token> {
-    fn match_refs(token: &Token) -> Option<Token> {
-        match token {
-            Token::Ref(r, display) => Some(token.clone()),
-            _ => None
-        }
-    }
+// fn filter_tokens_by_ref_type(v: &Vec<Token>) -> Vec<Token> {
+//     fn match_refs(token: &Token) -> Option<Token> {
+//         match token {
+//             Token::Ref(r, display) => Some(token.clone()),
+//             _ => None
+//         }
+//     }
 
-    v.iter().flat_map(|t| match_refs(t) ).collect()
-}
+//     v.iter().flat_map(|t| match_refs(t) ).collect()
+// }
 
 pub fn contains_ref_with_id(v: &Vec<Tag>, id_token: &Token) -> bool
 {

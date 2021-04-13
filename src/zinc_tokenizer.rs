@@ -58,15 +58,15 @@ where
     delimited(space0, f, space0)
 }
 
-fn multispacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
-where
-    F: Fn(I) -> IResult<I, O, E>,
-    I: nom::InputTakeAtPosition,
-    <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
-    E: nom::error::ParseError<I>,
-{
-    delimited(multispace0, f, multispace0)
-}
+// fn multispacey<F, I, O, E>(f: F) -> impl Fn(I) -> IResult<I, O, E>
+// where
+//     F: Fn(I) -> IResult<I, O, E>,
+//     I: nom::InputTakeAtPosition,
+//     <I as nom::InputTakeAtPosition>::Item: nom::AsChar + Clone,
+//     E: nom::error::ParseError<I>,
+// {
+//     delimited(multispace0, f, multispace0)
+// }
 
 // fn comma<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
 //     map(tag(","), |_: &str| Token::Comma)(i)
@@ -78,11 +78,11 @@ fn comma_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
     })(i)
 }
 
-fn newline_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
-    map(tag(","), |_: &str| {
-        Val::new(Box::new(NewLine::new()) as Box<dyn HVal>)
-    })(i)
-}
+// fn newline_val<'a>(i: &'a str) -> IResult<&'a str, Val, (&'a str, ErrorKind)> {
+//     map(tag(","), |_: &str| {
+//         Val::new(Box::new(NewLine::new()) as Box<dyn HVal>)
+//     })(i)
+// }
 
 fn null<'a>(i: &'a str) -> IResult<&'a str, Token, (&'a str, ErrorKind)> {
     map(tag("N"), |_: &str| Token::Null)(i)
@@ -533,12 +533,12 @@ fn exponent<'a>(i: &'a str) -> IResult<&'a str, &'a str, (&'a str, ErrorKind)> {
     recognize(tuple((alt((char('e'), char('E'))), simple_number)))(i)
 }
 
-fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
-    map(
-        recognize(tuple((simple_number, opt(exponent)))),
-        |s: &str| s.parse::<f64>().unwrap(),
-    )(i)
-}
+// fn number<'a>(i: &'a str) -> IResult<&'a str, f64, (&'a str, ErrorKind)> {
+//     map(
+//         recognize(tuple((simple_number, opt(exponent)))),
+//         |s: &str| s.parse::<f64>().unwrap(),
+//     )(i)
+// }
 
 
 fn integer_number<'a>(i: &'a str) -> IResult<&'a str, i64, (&'a str, ErrorKind)> {
@@ -804,7 +804,7 @@ fn rows<'a>(i: &'a str) -> IResult<&'a str, Rows, (&'a str, ErrorKind)> {
         separated_list(spacey(nl), row), // list of rows seperated by newline
         |v: Vec<Row>| {
             // Each row must end in nl we pop this here
-            let mut tmp: Vec<Row> = v.into_iter().filter(|r| r.len() > 0 ).collect();
+            let tmp: Vec<Row> = v.into_iter().filter(|r| r.len() > 0 ).collect();
             // tmp.pop();
             Rows::new(tmp)
         },

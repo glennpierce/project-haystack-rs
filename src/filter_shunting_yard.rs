@@ -6,12 +6,13 @@
 //!
 //! [RPN]: https://en.wikipedia.org/wiki/Reverse_Polish_notation
 //! [shunting]: https://en.wikipedia.org/wiki/Shunting-yard_algorithm
-use std;
-use std::fmt;
+// use std;
+// use std::fmt;
 
 use crate::error::*;
 use crate::token::Token;
-use crate::filter_tokenizer::{FilterToken, Operation, tokenize, tokenize2};
+// use crate::filter_tokenizer::{FilterToken, Operation, tokenize, tokenize2};
+use crate::filter_tokenizer::{FilterToken, Operation};
 
 #[derive(Debug, Clone, Copy)]
 enum Associativity {
@@ -25,7 +26,7 @@ enum Associativity {
 fn prec_assoc(token: &FilterToken) -> (u32, Associativity) {
 
     use Operation::*;
-    use Token::*;
+    // use Token::*;
     use FilterToken::*;
     match *token {
         Binary(op) => match op {
@@ -33,7 +34,7 @@ fn prec_assoc(token: &FilterToken) -> (u32, Associativity) {
             And => (2, Associativity::Left),
             Equals => (3, Associativity::Left),
             LessThan | MoreThan | LessThanEquals | MoreThanEquals => (4, Associativity::Left),
-            Has => (5, Associativity::Left),
+            // Has => (5, Associativity::Left),
             _ => {
                 println!("{:?}", op);
                 unimplemented!()

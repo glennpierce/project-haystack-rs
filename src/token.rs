@@ -204,7 +204,7 @@ impl Token {
     pub fn as_integer(&self) -> Option<i64> {
     
         match &self {
-            Token::FloatNumber(id, units) => Some(id.number as i64),
+            Token::FloatNumber(id, _units) => Some(id.number as i64),
             _ => None
         }
     }
@@ -932,6 +932,7 @@ impl HVal for Dict {
 
 ////////////////////////////////
 
+#[derive(Clone)]
 pub struct List {
     vals: Vec<Val>,
 }

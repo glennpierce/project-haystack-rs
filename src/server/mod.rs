@@ -1,9 +1,9 @@
-use parking_lot::RwLock;
+// use parking_lot::RwLock;
 use std::collections::{HashMap};
 use std::num::NonZeroU32;
-use std::sync::Arc;
+// use std::sync::Arc;
 use std::str;
-use std::fmt;
+// use std::fmt;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -16,7 +16,7 @@ use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use std::time::Duration;
 
 use ring;
-use bytes;
+// use bytes;
 
 use crate::hval::{HVal};
 use crate::token::*;
@@ -310,7 +310,7 @@ fn xor(src1: &[u8], src2: &[u8]) -> Vec<u8> {
 
 lazy_static! {
     static ref TEMPORARY_STORAGE: Mutex<HashMap<String, HashMap<String, String>>> = {
-        let mut m = Mutex::new(HashMap::new());
+        let m = Mutex::new(HashMap::new());
         m
     };
 }
@@ -362,7 +362,7 @@ fn get_temporary_value(handshake_token: &str, k: &str) -> HaystackResult<Option<
 
 lazy_static! {
     static ref AUTHTOKEN_STORAGE: Mutex<HashMap<String, String>> = {
-        let mut m = Mutex::new(HashMap::new());
+        let m = Mutex::new(HashMap::new());
         m
     };
 }
@@ -525,7 +525,7 @@ fn decode_jwt_hanshake_token(token: &str) -> HaystackResult<(String, u64)> {
 
     let concatenated = format!("{}.{}", &parts[0], &parts[1]);
 
-    let header = byte_decode_jwt_part_str(parts[0])?;
+    let _header = byte_decode_jwt_part_str(parts[0])?;
     let payload = byte_decode_jwt_part_str(parts[1])?;
 
     println!("{}", payload);
@@ -825,7 +825,9 @@ pub fn haystack_authentication_handle_final_message(header: &str, salted_passwor
     let stored_server_first_message_option = stored_server_first_message_result.unwrap();
     let stored_client_username_option = stored_client_username_result.unwrap();
 
-    remove_temporary_token(client_handshake_token.as_str());
+    if remove_temporary_token(client_handshake_token.as_str()).is_err() {
+        debug!("failed to remove token");
+    }
 
     if stored_client_first_message_option.is_none() || stored_server_first_message_option.is_none() || stored_client_username_option.is_none() {
         debug!("No salt or nonce");
@@ -950,7 +952,7 @@ pub async fn haystack_authentication(header: String, salts: (String, String)) ->
     }
     else if header.to_lowercase().contains("scram") {
 
-        let (client_handshake_token, data_str) = nom_decode_scram_data(&header);
+        let (_client_handshake_token, data_str) = nom_decode_scram_data(&header);
 
         let gs2_header_result = gs2_header(&data_str);
    
@@ -984,7 +986,7 @@ pub async fn haystack_authentication(header: String, salts: (String, String)) ->
 // productVersion: Str version of the server software product
 // moduleName: module which implements Haystack server protocol if its a plug-in to the product
 // moduleVersion: Str version of moduleName
-async fn about(token: String) -> Result<impl warp::Reply, warp::Rejection> {
+async fn about(_token: String) -> Result<impl warp::Reply, warp::Rejection> {
    
     let grid_metadata = GridMeta::new(Token::Ver("3.0".into()), None);
 
@@ -1009,7 +1011,7 @@ async fn about(token: String) -> Result<impl warp::Reply, warp::Rejection> {
 // // FOpsOp
 // //////////////////////////////////////////////////////////////////////////
 
-async fn ops(token: String) -> Result<impl warp::Reply, warp::Rejection> {
+async fn ops(_token: String) -> Result<impl warp::Reply, warp::Rejection> {
    
     // ver:"3.0"
     // name,summary
@@ -1045,7 +1047,7 @@ async fn ops(token: String) -> Result<impl warp::Reply, warp::Rejection> {
 // // FormatsOp
 // //////////////////////////////////////////////////////////////////////////
 
-async fn formats(token: String) -> Result<impl warp::Reply, warp::Rejection> {
+async fn formats(_token: String) -> Result<impl warp::Reply, warp::Rejection> {
    
     // ver:"3.0"
     // mime,receive,send
@@ -1132,7 +1134,7 @@ async fn formats(token: String) -> Result<impl warp::Reply, warp::Rejection> {
 // 2012-10-01T00:45:00-04:00 New_York,75.0°F
 // ..
 pub async fn historical_read (
-    token: String,
+    _token: String,
     grid_bytes: warp::hyper::body::Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
 
@@ -1212,7 +1214,7 @@ pub async fn historical_read (
 // 2012-04-21T08:45:00-04:00 New_York,76.3
 // curl -X POST http://127.0.0.1:4337/hisWrite -H "authorization: BEARER authToken=7e0d0ab09e04776c50681f61cc2e66b0d216fbcc" --data $'ver:"3.0" id:@hisId\nts,val\n2012-04-21T08:30:00-04:00,48.7'
 pub async fn historical_write (
-    token: String,
+    _token: String,
     grid_bytes: warp::hyper::body::Bytes,
 ) -> Result<impl warp::Reply, Infallible> {
 
@@ -1245,7 +1247,7 @@ pub async fn historical_write (
     Ok(response)
 }
 
-async fn hello(token: String) -> Result<impl warp::Reply, warp::Rejection> {
+async fn hello(_token: String) -> Result<impl warp::Reply, warp::Rejection> {
 
     let response = warp::reply::with_status("Hello", http::StatusCode::from_u16(200).unwrap());
 
