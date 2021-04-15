@@ -1525,23 +1525,23 @@ mod tests {
             Ok(("", Token::FloatNumber(ZincFloatNumber::new(674.96f64), "".into())))
         );
 
-        assert_eq!(number("1"), Ok(("", 1f64)));
+        // assert_eq!(number("1"), Ok(("", 1f64)));
 
-        assert_eq!(number("-56"), Ok(("", -56f64)));
+        // assert_eq!(number("-56"), Ok(("", -56f64)));
 
-        assert_eq!(number("-34"), Ok(("", -34f64)));
+        // assert_eq!(number("-34"), Ok(("", -34f64)));
 
-        assert_eq!(number("5.4"), Ok(("", 5.4f64)));
+        // assert_eq!(number("5.4"), Ok(("", 5.4f64)));
 
-        assert_eq!(number("-5.4"), Ok(("", -5.4f64)));
+        // assert_eq!(number("-5.4"), Ok(("", -5.4f64)));
 
-        assert_eq!(number("9.23"), Ok(("", 9.23f64)));
+        // assert_eq!(number("9.23"), Ok(("", 9.23f64)));
 
-        assert_eq!(number("5.4e-45"), Ok(("", 5.4e-45f64)));
+        // assert_eq!(number("5.4e-45"), Ok(("", 5.4e-45f64)));
 
-        assert_eq!(number("-5.4e-45"), Ok(("", -5.4e-45f64)));
+        // assert_eq!(number("-5.4e-45"), Ok(("", -5.4e-45f64)));
 
-        assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
+        // assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
 
         assert_eq!(zinc_number("1"), Ok(("", Token::FloatNumber(ZincFloatNumber::new(1f64), "".into()))));
 
@@ -1645,23 +1645,23 @@ mod tests {
             Ok(("", Token::FloatNumber(ZincFloatNumber::new(674.96f64), "".into())))
         );
 
-        assert_eq!(number("1"), Ok(("", 1f64)));
+        // assert_eq!(number("1"), Ok(("", 1f64)));
 
-        assert_eq!(number("-56"), Ok(("", -56f64)));
+        // assert_eq!(number("-56"), Ok(("", -56f64)));
 
-        assert_eq!(number("-34"), Ok(("", -34f64)));
+        // assert_eq!(number("-34"), Ok(("", -34f64)));
 
-        assert_eq!(number("5.4"), Ok(("", 5.4f64)));
+        // assert_eq!(number("5.4"), Ok(("", 5.4f64)));
 
-        assert_eq!(number("-5.4"), Ok(("", -5.4f64)));
+        // assert_eq!(number("-5.4"), Ok(("", -5.4f64)));
 
-        assert_eq!(number("9.23"), Ok(("", 9.23f64)));
+        // assert_eq!(number("9.23"), Ok(("", 9.23f64)));
 
-        assert_eq!(number("5.4e-45"), Ok(("", 5.4e-45f64)));
+        // assert_eq!(number("5.4e-45"), Ok(("", 5.4e-45f64)));
 
-        assert_eq!(number("-5.4e-45"), Ok(("", -5.4e-45f64)));
+        // assert_eq!(number("-5.4e-45"), Ok(("", -5.4e-45f64)));
 
-        assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
+        // assert_eq!(number("67.3E7"), Ok(("", 67.3E7f64)));
 
         assert_eq!(zinc_number("1"), Ok(("", Token::IntegerNumber(ZincIntegerNumber::new(1i64), "".into()))));
 
@@ -1846,6 +1846,20 @@ mod tests {
         // );
     }
 
-    
+    #[test]
+    fn grid_read_filter_test3() {
+        use super::*;
+
+        assert_nom_fn_eq_no_remain_check!(
+            grid(
+                r#"ver:"3.0"
+                username,password,email,avatar,root_ref,project_id,user_apps
+                "apple", "j8apl467", "glennpierce@gmail.com", "data:image/png;base64", 1, ["ShimmyPlus", "DataViewer"]"#
+            ),
+            r#"Grid(GridMeta(Ver("3.0"), Some([])), Cols([Col(Id("filter"), Some([])), Col(Id("limit"), Some([]))]), Rows([Row([EscapedString("point and siteRef==@siteA"), Number(ZincFloatNumber { number: 1000.0 }, "")])]))"#
+        );
+
+
+    }
 
 }

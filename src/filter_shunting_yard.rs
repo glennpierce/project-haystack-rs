@@ -141,7 +141,8 @@ pub fn to_rpn(input: &[FilterToken]) -> Result<Vec<FilterToken>, RPNError> {
 mod tests {
     use super::*;
     use FilterToken::*;
-
+    use crate::filter_tokenizer::{FilterToken, Operation, tokenize, tokenize2};
+    
     macro_rules! id_to_token {
         ($a:expr) => {
             Token::Id($a.to_string())
