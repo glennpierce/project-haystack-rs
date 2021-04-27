@@ -1862,4 +1862,13 @@ mod tests {
 
     }
 
+
+    #[test]
+    fn grid_read_filter_test4() {
+        use super::*;
+
+        println!("{:?}", grid("ver:\"3.0\" action:\"siteinfo\"\nsite_ref\n@23233\n"));
+        println!("{:?}", grid("ver:\"3.0\" action:\"siteinfo\"\nsite_ref\n[@199, @740]\n"));
+    }
+
 }
