@@ -216,6 +216,11 @@ fn and_or<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)>
     alt((and, or))(i)
 }
 
+// fn contains<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
+
+//     map(tag("in"), |_o: &str| { FilterToken::Binary(Operation::In)})(i)
+// }
+
 // fn and_or_cmp<'a>(i: &'a str) -> IResult<&'a str, FilterToken, (&'a str, ErrorKind)> {
     
 //     alt((cmp2, and, or))(i)
@@ -272,6 +277,7 @@ pub enum Operation {
     Or,
     And,
     Not,
+    In,
     // Has,
     Equals,
     NotEquals,
@@ -770,6 +776,21 @@ mod tests {
         ));
 
         println!("{:?}", tokenize2("equip or siteRef->dis == \"Chicago\""));
+    }
+
+    #[test]
+    fn test_tokenize3() {
+        use super::Operation::*;
+        use super::FilterToken::*;
+        use super::Token;
+
+
+
+        println!("{:?}", tokenize2("equip or siteRef->dis == \"Chicago\""));
+
+        println!("{:?}", tokenize2("equip or siteRef->dis == \"Chicago\""));
+
+        println!("{:?}", tokenize2("equip and (siteRef->dis == \"Chicago\" or siteRef->dis == \"NewYork\")"));
     }
 
     #[test]

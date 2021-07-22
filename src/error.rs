@@ -2,17 +2,7 @@
 use std::io;
 use std::fmt;
 use std::num;
-// use std::error::Error;
-
-// macro_rules! fatal {
-//     ($($tt:tt)*) => {{
-//         use std::io::Write;
-//         writeln!(&mut ::std::io::stderr(), $($tt)*).unwrap();
-//         ::std::process::exit(1)
-//     }}
-// }
-
-
+use std::rc::Rc;
 
 /// An error produced by the shunting-yard algorightm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
